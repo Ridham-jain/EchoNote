@@ -1,0 +1,3523 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EchoNote — recordings, understood</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    /* =========================================================
+   EchoNote — Design tokens
+   A tape-deck / studio aesthetic: near-black charcoal body,
+   warm amber "recording" accent, cool teal for calm/ready
+   states. The waveform is the signature element throughout —
+   it doubles as a live status indicator, not just decoration.
+   ========================================================= */
+    :root {
+      --bg: #FAF7FF;
+      /* soft lavender-white */
+      --bg-raised: #FFFFFF;
+      --surface: #FFFFFF;
+      --surface-2: #F3EAFB;
+      --border: #E3D3F7;
+      --border-soft: #EDE1FA;
+      --text: #2D1B4E;
+      /* deep purple-black */
+      --text-muted: #7A6A99;
+      --text-faint: #B4A3D1;
+      --accent: #A855F7;
+      /* vivid purple */
+      --accent-soft: rgba(168, 85, 247, 0.12);
+      --accent-strong: #7E22CE;
+      --teal: #14C88E;
+      /* neon-mint green, replaces the old teal */
+      --teal-soft: rgba(20, 200, 142, 0.13);
+      --danger: #F43F5E;
+      /* pink-red */
+      --danger-soft: rgba(244, 63, 94, 0.12);
+
+      --font-display: 'Space Grotesk', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    /* Markdown rendering */
+    .md h4 {
+      font-family: var(--font-display);
+      font-size: 13.5px;
+      font-weight: 600;
+      margin: 14px 0 6px;
+      color: var(--text);
+    }
+
+    .md h4:first-child {
+      margin-top: 0;
+    }
+
+    .md p {
+      margin-bottom: 10px;
+    }
+
+    .md p:last-child {
+      margin-bottom: 0;
+    }
+
+    .md ul {
+      padding-left: 20px;
+      margin: 6px 0 10px;
+    }
+
+    .md li {
+      margin-bottom: 5px;
+    }
+
+    .md strong {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .md code {
+      font-family: var(--font-mono);
+      font-size: 0.92em;
+      background: var(--surface-2);
+      padding: 1px 5px;
+      border-radius: 4px;
+      border: 1px solid var(--border-soft);
+    }
+
+    /* Mistake-prone content flagging */
+    mark.flag {
+      background: var(--accent-soft);
+      color: inherit;
+      border-bottom: 1.5px dashed var(--accent);
+      border-radius: 2px;
+      padding: 0 1px;
+      cursor: help;
+    }
+
+    .confidence-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: var(--text-faint);
+      background: var(--surface);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-sm);
+      padding: 9px 12px;
+      margin-bottom: 16px;
+    }
+
+    .confidence-note svg {
+      flex-shrink: 0;
+      margin-top: 1px;
+      color: var(--accent);
+    }
+
+    .mistakes-section {
+      margin-top: 20px;
+      border-top: 1px solid var(--border-soft);
+      padding-top: 14px;
+    }
+
+    .mistakes-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .mistakes-toggle svg {
+      transition: transform .18s var(--ease);
+      flex-shrink: 0;
+    }
+
+    .mistakes-section[open] .mistakes-toggle svg {
+      transform: rotate(90deg);
+    }
+
+    .mistakes-count {
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      padding: 1px 7px;
+      border-radius: 20px;
+    }
+
+    .mistakes-list {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .mistakes-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12.5px;
+      line-height: 1.5;
+      background: var(--surface);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+    }
+
+    .mistakes-item .snippet {
+      color: var(--text);
+      font-weight: 500;
+      flex: 1;
+    }
+
+    .mistakes-item .pct {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--accent-strong);
+      background: var(--accent-soft);
+      padding: 1px 6px;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+
+    .mistakes-item .time {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--text-faint);
+      flex-shrink: 0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      color: var(--text);
+      font-family: var(--font-body);
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+
+    #bg-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      display: block;
+    }
+
+    button {
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    input,
+    textarea {
+      font-family: inherit;
+    }
+
+    ::selection {
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+    }
+
+    ::-webkit-scrollbar {
+      width: 9px;
+      height: 9px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 8px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-faint);
+    }
+
+    button,
+    .job-card,
+    .tab,
+    .dropzone,
+    .user-chip,
+    .upload-btn,
+    a,
+    [onclick] {
+      cursor: pointer;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+
+    /* ---------- Logo mark (used in topbar + auth) ---------- */
+    .mark {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .mark-bars {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      height: 20px;
+    }
+
+    .mark-bars span {
+      display: block;
+      width: 3px;
+      border-radius: 2px;
+      background: var(--accent);
+      animation: markpulse 1.6s ease-in-out infinite;
+    }
+
+    .mark-bars span:nth-child(1) {
+      height: 8px;
+      animation-delay: 0s;
+    }
+
+    .mark-bars span:nth-child(2) {
+      height: 18px;
+      animation-delay: .15s;
+    }
+
+    .mark-bars span:nth-child(3) {
+      height: 12px;
+      animation-delay: .3s;
+    }
+
+    .mark-bars span:nth-child(4) {
+      height: 20px;
+      animation-delay: .45s;
+    }
+
+    .mark-bars span:nth-child(5) {
+      height: 6px;
+      animation-delay: .6s;
+    }
+
+    @keyframes markpulse {
+
+      0%,
+      100% {
+        transform: scaleY(0.55);
+        opacity: .75;
+      }
+
+      50% {
+        transform: scaleY(1);
+        opacity: 1;
+      }
+    }
+
+    .mark-word {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 19px;
+      letter-spacing: 0.2px;
+    }
+
+    .mark-word b {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* ---------- Landing page ---------- */
+    #landing-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      overflow-y: auto;
+      display: none;
+    }
+
+    #landing-screen.show {
+      display: block;
+    }
+
+    .landing-nav {
+      position: sticky;
+      top: 0;
+      z-index: 6;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      background: rgba(250, 247, 255, 0.8);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .landing-nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--accent);
+      color: var(--accent-strong);
+    }
+
+    .btn-cta {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .btn-cta:hover {
+      background: var(--accent-strong);
+    }
+
+    .landing-hero {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 90px 32px 60px;
+      text-align: center;
+    }
+
+    .landing-hero h1 {
+      font-family: var(--font-display);
+      font-size: 44px;
+      font-weight: 600;
+      line-height: 1.15;
+      margin-bottom: 18px;
+      letter-spacing: -0.01em;
+    }
+
+    .landing-hero h1 span {
+      color: var(--accent);
+    }
+
+    .landing-hero p {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 560px;
+      margin: 0 auto 30px;
+      line-height: 1.6;
+    }
+
+    .landing-hero-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .landing-hero-actions .btn {
+      width: auto;
+      padding: 13px 26px;
+      font-size: 15px;
+    }
+
+    .landing-section {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 50px 32px;
+    }
+
+    .landing-section-head {
+      text-align: center;
+      max-width: 520px;
+      margin: 0 auto 40px;
+    }
+
+    .landing-section-head h2 {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .landing-section-head p {
+      color: var(--text-muted);
+      font-size: 14.5px;
+      line-height: 1.6;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .feature-card {
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 26px 22px;
+      transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+    }
+
+    .feature-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 18px 40px -18px rgba(42, 36, 25, 0.18);
+    }
+
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+    }
+
+    .feature-card h3 {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .feature-card p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* Product-preview mockups: reuse real app classes so this genuinely
+   looks like the product, not a stock screenshot */
+    .mockup-row {
+      display: flex;
+      flex-direction: column;
+      gap: 60px;
+    }
+
+    .mockup {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: center;
+    }
+
+    .mockup.reverse {
+      direction: rtl;
+    }
+
+    .mockup.reverse>* {
+      direction: ltr;
+    }
+
+    .mockup-copy h3 {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .mockup-copy p {
+      color: var(--text-muted);
+      font-size: 14.5px;
+      line-height: 1.7;
+    }
+
+    .mockup-window {
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 30px 70px -24px rgba(42, 36, 25, 0.22);
+      overflow: hidden;
+    }
+
+    .mockup-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-soft);
+      background: var(--surface-2);
+    }
+
+    .mockup-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+    }
+
+    .mockup-body {
+      padding: 18px 20px;
+    }
+
+    .landing-footer {
+      border-top: 1px solid var(--border-soft);
+      padding: 30px 32px;
+      text-align: center;
+      color: var(--text-faint);
+      font-size: 12.5px;
+    }
+
+    @media (max-width: 820px) {
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .mockup,
+      .mockup.reverse {
+        grid-template-columns: 1fr;
+        direction: ltr;
+      }
+
+      .landing-hero h1 {
+        font-size: 32px;
+      }
+    }
+
+    /* =========================================================
+   AUTH SCREEN
+   ========================================================= */
+    #auth-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+    }
+
+    .auth-card {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 396px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 40px 36px 32px;
+      animation: cardin .55s var(--ease);
+      box-shadow: 0 24px 60px -20px rgba(42, 36, 25, 0.18);
+    }
+
+    @keyframes cardin {
+      from {
+        opacity: 0;
+        transform: translateY(14px) scale(.98);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .auth-card .mark {
+      margin-bottom: 6px;
+    }
+
+    .auth-tag {
+      color: var(--text-muted);
+      font-size: 13.5px;
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-bottom: 7px;
+    }
+
+    .field input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius-sm);
+      padding: 11px 13px;
+      font-size: 14px;
+      transition: border-color .18s var(--ease), background .18s var(--ease);
+    }
+
+    .field input:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: var(--surface-2);
+    }
+
+    .field input::placeholder {
+      color: var(--text-faint);
+    }
+
+    .btn {
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      padding: 11px 18px;
+      font-size: 14px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: transform .12s var(--ease), background .18s var(--ease), border-color .18s var(--ease), opacity .18s;
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #FFFFFF;
+      width: 100%;
+      font-weight: 600;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-strong);
+    }
+
+    .btn-primary:disabled {
+      opacity: .5;
+      pointer-events: none;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--text-muted);
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--text-faint);
+      color: var(--text);
+    }
+
+    .btn-icon {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 6px;
+      border-radius: 8px;
+    }
+
+    .btn-icon:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    .auth-switch {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--text-faint);
+    }
+
+    .auth-switch a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .auth-switch a:hover {
+      text-decoration: underline;
+    }
+
+    .auth-error {
+      background: var(--danger-soft);
+      border: 1px solid rgba(244, 63, 94, 0.35);
+      color: #9F1239;
+      font-size: 12.5px;
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 16px;
+      display: none;
+      line-height: 1.4;
+    }
+
+    .auth-error.show {
+      display: block;
+      animation: shakein .3s var(--ease);
+    }
+
+    @keyframes shakein {
+      0% {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .auth-settings-link {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 2;
+    }
+
+    /* =========================================================
+   APP SHELL
+   ========================================================= */
+    #app {
+      position: relative;
+      z-index: 1;
+      height: 100vh;
+      display: none;
+      flex-direction: column;
+    }
+
+    #app.show {
+      display: flex;
+    }
+
+    .topbar {
+      height: 58px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px 0 20px;
+      border-bottom: 1px solid var(--border-soft);
+      background: rgba(250, 247, 255, 0.78);
+      backdrop-filter: blur(10px);
+      position: relative;
+      z-index: 20;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .user-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px 6px 6px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 13px;
+      color: var(--text-muted);
+      position: relative;
+    }
+
+    .user-chip:hover {
+      border-color: var(--text-faint);
+    }
+
+    .user-avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--teal));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+
+    .user-menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      min-width: 170px;
+      box-shadow: 0 18px 44px -12px rgba(42, 36, 25, 0.16);
+      display: none;
+      overflow: hidden;
+      z-index: 30;
+    }
+
+    .user-menu.open {
+      display: block;
+      animation: popin .16s var(--ease);
+    }
+
+    @keyframes popin {
+      from {
+        opacity: 0;
+        transform: translateY(-6px) scale(.96);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .user-menu button {
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: none;
+      color: var(--text);
+      padding: 10px 14px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .user-menu button:hover {
+      background: var(--surface-2);
+    }
+
+    .user-menu button.danger {
+      color: #DB2777;
+    }
+
+    .user-menu-email {
+      padding: 10px 14px 8px;
+      font-size: 11.5px;
+      color: var(--text-faint);
+      border-bottom: 1px solid var(--border-soft);
+      word-break: break-all;
+    }
+
+    .export-wrap {
+      position: relative;
+      display: inline-block;
+      margin-bottom: 16px;
+    }
+
+    .export-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      min-width: 170px;
+      box-shadow: 0 18px 44px -12px rgba(42, 36, 25, 0.16);
+      display: none;
+      overflow: hidden;
+      z-index: 30;
+    }
+
+    .export-menu.open {
+      display: block;
+      animation: popin .16s var(--ease);
+    }
+
+    .export-menu button {
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: none;
+      color: var(--text);
+      padding: 10px 14px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .export-menu button:hover {
+      background: var(--surface-2);
+    }
+
+    .file-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--accent-strong);
+      background: var(--accent-soft);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      transition: background .15s var(--ease);
+    }
+
+    .file-link:hover {
+      background: rgba(168, 85, 247, 0.2);
+    }
+
+    .layout {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+
+    /* ---------- Sidebar ---------- */
+    .sidebar {
+      width: 296px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border-soft);
+      display: flex;
+      flex-direction: column;
+      background: var(--surface-2);
+    }
+
+    .sidebar-head {
+      padding: 16px 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .sidebar-title {
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+    }
+
+    .upload-btn {
+      width: 100%;
+      background: var(--accent-soft);
+      border: 1px dashed rgba(168, 85, 247, 0.4);
+      color: var(--accent-strong);
+      border-radius: var(--radius-md);
+      padding: 11px;
+      font-size: 13.5px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background .18s var(--ease), border-color .18s var(--ease);
+    }
+
+    .upload-btn:hover {
+      background: rgba(168, 85, 247, 0.18);
+      border-color: var(--accent);
+    }
+
+    .job-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 10px 16px;
+    }
+
+    .job-empty {
+      color: var(--text-faint);
+      font-size: 12.5px;
+      text-align: center;
+      padding: 40px 16px;
+      line-height: 1.6;
+    }
+
+    .job-card {
+      padding: 11px 12px;
+      border-radius: var(--radius-md);
+      margin-bottom: 4px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      animation: jobin .35s var(--ease) backwards;
+      transition: background .15s var(--ease), border-color .15s var(--ease);
+      position: relative;
+    }
+
+    @keyframes jobin {
+      from {
+        opacity: 0;
+        transform: translateX(-6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .job-card:hover {
+      background: var(--surface);
+    }
+
+    .job-card.active {
+      background: var(--surface-2);
+      border-color: var(--border);
+    }
+
+    .job-card.active::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 10px;
+      bottom: 10px;
+      width: 2.5px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    .job-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+
+    .job-title {
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .job-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .job-date {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--text-faint);
+    }
+
+    .status-pill {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 2.5px 7px;
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+
+    .status-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+    }
+
+    .status-uploading,
+    .status-processing,
+    .status-transcribing,
+    .status-queued {
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+    }
+
+    .status-uploading .status-dot,
+    .status-processing .status-dot,
+    .status-transcribing .status-dot,
+    .status-queued .status-dot {
+      background: var(--accent);
+      animation: dotpulse 1s ease-in-out infinite;
+    }
+
+    .status-ready,
+    .status-done,
+    .status-completed {
+      background: var(--teal-soft);
+      color: var(--teal);
+    }
+
+    .status-ready .status-dot,
+    .status-done .status-dot,
+    .status-completed .status-dot {
+      background: var(--teal);
+    }
+
+    .status-error,
+    .status-failed {
+      background: var(--danger-soft);
+      color: #DB2777;
+    }
+
+    .status-error .status-dot,
+    .status-failed .status-dot {
+      background: var(--danger);
+    }
+
+    @keyframes dotpulse {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: .4;
+        transform: scale(0.7);
+      }
+    }
+
+    .mini-wave {
+      display: flex;
+      align-items: flex-end;
+      gap: 1.5px;
+      height: 12px;
+    }
+
+    .mini-wave span {
+      width: 2px;
+      background: var(--text-faint);
+      border-radius: 1px;
+    }
+
+    /* ---------- Workspace ---------- */
+    .workspace {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      color: var(--text-faint);
+      text-align: center;
+      padding: 40px;
+    }
+
+    .empty-wave {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 44px;
+    }
+
+    .empty-wave span {
+      width: 4px;
+      border-radius: 3px;
+      background: var(--text-faint);
+      animation: idlewave 2.4s ease-in-out infinite;
+    }
+
+    @keyframes idlewave {
+
+      0%,
+      100% {
+        transform: scaleY(0.3);
+      }
+
+      50% {
+        transform: scaleY(1);
+      }
+    }
+
+    .empty-state h3 {
+      font-family: var(--font-display);
+      font-size: 16px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .empty-state p {
+      font-size: 13px;
+      max-width: 280px;
+      line-height: 1.6;
+    }
+
+    .job-header {
+      padding: 18px 26px 14px;
+      border-bottom: 1px solid var(--border-soft);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      animation: fadein .3s var(--ease);
+    }
+
+    @keyframes fadein {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    .job-header h2 {
+      font-family: var(--font-display);
+      font-size: 19px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    .job-header .job-sub {
+      font-size: 12px;
+      color: var(--text-faint);
+      font-family: var(--font-mono);
+    }
+
+    .job-header-wave {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+
+    .job-header-wave span {
+      width: 3px;
+      border-radius: 2px;
+      background: var(--accent);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 2px;
+      padding: 0 26px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .tab {
+      padding: 12px 4px;
+      margin-right: 22px;
+      font-size: 13.5px;
+      color: var(--text-faint);
+      border-bottom: 2px solid transparent;
+      font-weight: 500;
+      transition: color .15s var(--ease);
+    }
+
+    .tab:hover {
+      color: var(--text-muted);
+    }
+
+    .tab.active {
+      color: var(--text);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-panels {
+      flex: 1;
+      min-height: 0;
+      position: relative;
+    }
+
+    .tab-panel {
+      position: absolute;
+      inset: 0;
+      overflow-y: auto;
+      padding: 24px 26px 32px;
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+      animation: paneup .28s var(--ease);
+    }
+
+    @keyframes paneup {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .transcript-line {
+      display: flex;
+      gap: 14px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-soft);
+      font-size: 13.5px;
+      line-height: 1.65;
+    }
+
+    .transcript-line .ts {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-faint);
+      flex-shrink: 0;
+      padding-top: 2px;
+      width: 52px;
+    }
+
+    .transcript-line .spk {
+      font-weight: 600;
+      color: var(--teal);
+      flex-shrink: 0;
+      width: 88px;
+      font-size: 12.5px;
+    }
+
+    .transcript-line .txt {
+      color: var(--text);
+    }
+
+    .processing-note {
+      color: var(--text-faint);
+      font-size: 13px;
+      text-align: center;
+      padding: 50px 20px;
+      line-height: 1.7;
+    }
+
+    .summary-block {
+      max-width: 640px;
+    }
+
+    .summary-block h4 {
+      font-family: var(--font-display);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--accent);
+      margin: 22px 0 10px;
+      font-weight: 600;
+    }
+
+    .summary-block h4:first-child {
+      margin-top: 0;
+    }
+
+    .summary-block p,
+    .summary-block li {
+      font-size: 14px;
+      line-height: 1.75;
+      color: var(--text);
+    }
+
+    .summary-block ul {
+      padding-left: 20px;
+      margin-top: 6px;
+    }
+
+    .summary-block li {
+      margin-bottom: 6px;
+    }
+
+    /* ---------- Markdown rendering (used inside .md wrapper) ---------- */
+    .md h4 {
+      font-family: var(--font-display);
+      font-size: 13.5px;
+      font-weight: 600;
+      margin: 14px 0 6px;
+      color: var(--text);
+    }
+
+    .md h4:first-child {
+      margin-top: 0;
+    }
+
+    .md p {
+      margin-bottom: 10px;
+      line-height: 1.7;
+    }
+
+    .md p:last-child {
+      margin-bottom: 0;
+    }
+
+    .md ul {
+      padding-left: 20px;
+      margin: 6px 0 10px;
+    }
+
+    .md li {
+      margin-bottom: 5px;
+      line-height: 1.65;
+    }
+
+    .md strong {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .md em {
+      font-style: italic;
+    }
+
+    .md code {
+      font-family: var(--font-mono);
+      font-size: 0.92em;
+      background: var(--surface-2);
+      padding: 1px 5px;
+      border-radius: 4px;
+      border: 1px solid var(--border-soft);
+    }
+
+    /* ---------- Mistake-prone content flagging ---------- */
+    mark.flag {
+      background: var(--accent-soft);
+      color: inherit;
+      border-bottom: 1.5px dashed var(--accent);
+      border-radius: 2px;
+      padding: 0 1px;
+      cursor: help;
+    }
+
+    .confidence-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: var(--text-faint);
+      background: var(--surface);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-sm);
+      padding: 9px 12px;
+      margin-bottom: 16px;
+    }
+
+    .confidence-note svg {
+      flex-shrink: 0;
+      margin-top: 1px;
+      color: var(--accent);
+    }
+
+    /* ---------- Ask / chat tab ---------- */
+    .ask-panel {
+      flex-direction: column;
+      height: 100%;
+      padding: 0 !important;
+    }
+
+    .ask-panel.active {
+      display: flex;
+    }
+
+    .chat-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 22px 26px;
+    }
+
+    .chat-empty {
+      text-align: center;
+      color: var(--text-faint);
+      font-size: 13px;
+      padding: 50px 20px;
+      line-height: 1.7;
+    }
+
+    .msg {
+      max-width: 78%;
+      margin-bottom: 14px;
+      animation: msgin .32s var(--ease) backwards;
+    }
+
+    @keyframes msgin {
+      from {
+        opacity: 0;
+        transform: translateY(8px) scale(.98);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .msg-user {
+      margin-left: auto;
+    }
+
+    .msg-bubble {
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 13.5px;
+      line-height: 1.6;
+    }
+
+    .msg-user .msg-bubble {
+      background: var(--accent);
+      color: #FFFFFF;
+      border-bottom-right-radius: 4px;
+      font-weight: 500;
+    }
+
+    .msg-ai .msg-bubble {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+
+    .msg-ai .msg-bubble.thinking {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 14px;
+    }
+
+    .think-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--text-faint);
+      animation: thinkbounce 1.2s ease-in-out infinite;
+    }
+
+    .think-dot:nth-child(2) {
+      animation-delay: .15s;
+    }
+
+    .think-dot:nth-child(3) {
+      animation-delay: .3s;
+    }
+
+    @keyframes thinkbounce {
+
+      0%,
+      60%,
+      100% {
+        transform: translateY(0);
+        opacity: .5;
+      }
+
+      30% {
+        transform: translateY(-4px);
+        opacity: 1;
+      }
+    }
+
+    .ask-inputbar {
+      border-top: 1px solid var(--border-soft);
+      padding: 14px 20px 18px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    .ask-inputbar textarea {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius-md);
+      padding: 11px 13px;
+      font-size: 13.5px;
+      resize: none;
+      max-height: 120px;
+      line-height: 1.5;
+      transition: border-color .18s var(--ease);
+    }
+
+    .ask-inputbar textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .send-btn {
+      background: var(--accent);
+      color: #FFFFFF;
+      border-radius: var(--radius-md);
+      border: none;
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .18s var(--ease), transform .12s var(--ease);
+    }
+
+    .send-btn:hover {
+      background: var(--accent-strong);
+    }
+
+    .send-btn:disabled {
+      opacity: .4;
+      pointer-events: none;
+    }
+
+    /* ---------- Upload modal ---------- */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(42, 36, 25, 0.32);
+      backdrop-filter: blur(3px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      animation: fadein .18s var(--ease);
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal {
+      width: 100%;
+      max-width: 440px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 26px;
+      animation: cardin .28s var(--ease);
+      box-shadow: 0 24px 60px -20px rgba(42, 36, 25, 0.18);
+    }
+
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .modal-head h3 {
+      font-family: var(--font-display);
+      font-size: 16.5px;
+      font-weight: 600;
+    }
+
+    .modal-sub {
+      color: var(--text-faint);
+      font-size: 12.5px;
+      margin-bottom: 20px;
+    }
+
+    .dropzone {
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius-md);
+      padding: 34px 20px;
+      text-align: center;
+      color: var(--text-faint);
+      font-size: 13px;
+      transition: border-color .18s var(--ease), background .18s var(--ease);
+      cursor: pointer;
+      margin-bottom: 16px;
+    }
+
+    .dropzone:hover,
+    .dropzone.drag {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+    }
+
+    .dropzone svg {
+      margin-bottom: 10px;
+      opacity: .7;
+    }
+
+    .dropzone .fname {
+      color: var(--text);
+      font-weight: 500;
+      margin-top: 6px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .upload-wave {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      height: 34px;
+      margin: 6px 0 18px;
+    }
+
+    .upload-wave.active {
+      display: flex;
+    }
+
+    .upload-wave span {
+      width: 3px;
+      border-radius: 2px;
+      background: var(--accent);
+      animation: uploadbar 0.9s ease-in-out infinite;
+    }
+
+    @keyframes uploadbar {
+
+      0%,
+      100% {
+        transform: scaleY(0.35);
+      }
+
+      50% {
+        transform: scaleY(1);
+      }
+    }
+
+    .field-title {
+      margin-bottom: 18px;
+    }
+
+    /* ---------- Settings modal ---------- */
+    .settings-note {
+      background: var(--surface);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      font-size: 11.5px;
+      color: var(--text-faint);
+      line-height: 1.55;
+      margin-bottom: 18px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .modal-actions .btn {
+      flex: 1;
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%) translateY(12px);
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 11px 18px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: all .28s var(--ease);
+      box-shadow: 0 18px 44px -12px rgba(42, 36, 25, 0.18);
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+
+    #toast.err {
+      border-color: rgba(217, 105, 79, 0.4);
+    }
+
+    #toast .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--teal);
+      flex-shrink: 0;
+    }
+
+    #toast.err .dot {
+      background: var(--danger);
+    }
+
+    /* Responsive */
+    @media (max-width: 820px) {
+      .sidebar {
+        position: fixed;
+        left: 0;
+        top: 58px;
+        bottom: 0;
+        z-index: 20;
+        transform: translateX(-100%);
+        transition: transform .25s var(--ease);
+        box-shadow: 20px 0 40px rgba(42, 36, 25, 0.12);
+      }
+
+      .sidebar.open {
+        transform: translateX(0);
+      }
+
+      .msg {
+        max-width: 90%;
+      }
+
+      #menu-toggle {
+        display: flex !important;
+      }
+    }
+
+    #menu-toggle {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+
+  <canvas id="bg-canvas"></canvas>
+
+  <div id="toast"><span class="dot"></span><span id="toast-text"></span></div>
+
+  <!-- ============ LANDING PAGE ============ -->
+  <div id="landing-screen" class="show">
+    <nav class="landing-nav">
+      <div class="mark">
+        <div class="mark-bars"><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="mark-word">Echo<b>Note</b></div>
+      </div>
+      <div class="landing-nav-actions">
+        <button class="btn btn-outline" onclick="showAuth('login')">Log in</button>
+        <button class="btn btn-cta" onclick="showAuth('signup')">Sign up</button>
+      </div>
+    </nav>
+
+    <section class="landing-hero">
+      <h1>Every recording, <span>transcribed, summarized,</span><br>and ready to talk to.</h1>
+      <p>Upload a meeting, interview, or voice note. EchoNote transcribes it, identifies speakers, writes a summary —
+        and
+        lets you ask it questions afterward.</p>
+      <div class="landing-hero-actions">
+        <button class="btn btn-cta" onclick="showAuth('signup')">Get started free</button>
+        <button class="btn btn-outline" onclick="showAuth('login')">I have an account</button>
+      </div>
+    </section>
+
+    <section class="landing-section">
+      <div class="landing-section-head">
+        <h2>Everything happens automatically</h2>
+        <p>Drop in an audio file. EchoNote handles the rest.</p>
+      </div>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+            </svg>
+          </div>
+          <h3>Accurate transcription</h3>
+          <p>Every word transcribed and time-stamped, with low-confidence spots flagged so you know what's worth
+            double-checking.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </div>
+          <h3>Speaker separation</h3>
+          <p>Meetings and interviews are automatically split by speaker, so the transcript reads like a real
+            conversation.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+            </svg>
+          </div>
+          <h3>Instant summaries</h3>
+          <p>Key points and action items, written the moment processing finishes — exportable as text, Markdown, or PDF.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          </div>
+          <h3>Ask it anything</h3>
+          <p>Chat with your recording afterward — every question and answer saved so you never lose track of what was
+            said.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <h3>Your recordings, only yours</h3>
+          <p>Every account only sees its own recordings and conversations — nothing is shared across users.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          </div>
+          <h3>Export anywhere</h3>
+          <p>Download transcripts and summaries as .txt, .md, or .pdf, or copy meeting recaps straight into an email.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="landing-section">
+      <div class="mockup-row">
+        <div class="mockup">
+          <div class="mockup-copy">
+            <h3>Watch it transcribe, live</h3>
+            <p>Upload any audio file and watch the status move from queued to transcribing to done — no refreshing
+              needed.</p>
+          </div>
+          <div class="mockup-window">
+            <div class="mockup-titlebar">
+              <span class="mockup-dot" style="background:#F43F5E;"></span>
+              <span class="mockup-dot" style="background:var(--accent);"></span>
+              <span class="mockup-dot" style="background:var(--teal);"></span>
+            </div>
+            <div class="mockup-body">
+              <div class="transcript-line"><span class="ts">00:04</span><span class="spk">Speaker 1</span><span
+                  class="txt">So the plan is to ship the search feature by Friday.</span></div>
+              <div class="transcript-line"><span class="ts">00:11</span><span class="spk">Speaker 2</span><span
+                  class="txt">Sounds good — I'll finalize the API contract today.</span></div>
+              <div class="transcript-line" style="border:none;"><span class="ts">00:18</span><span class="spk">Speaker
+                  1</span><span class="txt">Great, let's sync again Thursday.</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mockup reverse">
+          <div class="mockup-copy">
+            <h3>Summaries you can act on</h3>
+            <p>Key points and action items, generated automatically — ready to copy into an email or export as a PDF.
+            </p>
+          </div>
+          <div class="mockup-window">
+            <div class="mockup-titlebar">
+              <span class="mockup-dot" style="background:#F43F5E;"></span>
+              <span class="mockup-dot" style="background:var(--accent);"></span>
+              <span class="mockup-dot" style="background:var(--teal);"></span>
+            </div>
+            <div class="mockup-body">
+              <div class="summary-block">
+                <h4>Overview</h4>
+                <p>The team aligned on shipping the search feature by Friday.</p>
+                <h4>Action items</h4>
+                <ul>
+                  <li>Finalize the API contract</li>
+                  <li>Update the changelog</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mockup">
+          <div class="mockup-copy">
+            <h3>Ask it anything, afterward</h3>
+            <p>Come back days later and ask what was decided — EchoNote answers from the transcript, and remembers the
+              conversation.</p>
+          </div>
+          <div class="mockup-window">
+            <div class="mockup-titlebar">
+              <span class="mockup-dot" style="background:#F43F5E;"></span>
+              <span class="mockup-dot" style="background:var(--accent);"></span>
+              <span class="mockup-dot" style="background:var(--teal);"></span>
+            </div>
+            <div class="mockup-body">
+              <div class="msg msg-user" style="animation:none;">
+                <div class="msg-bubble">What did we decide about the launch date?</div>
+              </div>
+              <div class="msg msg-ai" style="animation:none;">
+                <div class="msg-bubble">The team agreed to ship the search feature by Friday.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="landing-footer">EchoNote — every recording, understood.</footer>
+  </div>
+
+  <!-- ============ AUTH SCREEN ============ -->
+  <div id="auth-screen">
+    <button class="btn btn-icon auth-settings-link" onclick="openModal('settings-modal')" title="Backend settings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <circle cx="12" cy="12" r="3" />
+        <path
+          d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+    </button>
+
+    <div class="auth-card">
+      <div class="mark">
+        <div class="mark-bars"><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="mark-word">Echo<b>Note</b></div>
+      </div>
+      <div class="auth-tag">Every recording, transcribed, summarized, and searchable in conversation.</div>
+
+      <div class="auth-error" id="auth-error"></div>
+
+      <div id="auth-fields">
+        <div class="field" id="field-fullname" style="display:none;"><label>Full name</label><input type="text"
+            id="auth-fullname" placeholder="Jane Doe" autocomplete="name"></div>
+        <div class="field"><label>Email</label><input type="email" id="auth-email" placeholder="you@work.com"
+            autocomplete="email"></div>
+        <div class="field" id="field-dob" style="display:none;"><label>Date of birth</label><input type="date"
+            id="auth-dob"></div>
+        <div class="field"><label>Password</label><input type="password" id="auth-password" placeholder="••••••••"
+            autocomplete="current-password"></div>
+        <div class="field" id="field-confirm-password" style="display:none;"><label>Confirm password</label><input
+            type="password" id="auth-confirm-password" placeholder="••••••••" autocomplete="new-password"></div>
+        <div class="field" id="field-invite" style="display:none;"><label>Invite code</label><input type="text"
+            id="auth-invite" placeholder="EchoNote-XXXXX"></div>
+      </div>
+      <button class="btn btn-primary" id="auth-submit" onclick="handleAuthSubmit()">Log in</button>
+      <div class="auth-switch" id="auth-switch">New here? <a onclick="toggleAuthMode()">Create an account</a></div>
+    </div>
+  </div>
+
+  <!-- ============ LOGOUT CONFIRM MODAL ============ -->
+  <div class="modal-overlay" id="logout-modal-overlay">
+    <div class="modal" style="max-width: 360px;">
+      <div class="modal-head">
+        <h3>Log out?</h3><button class="btn btn-icon" onclick="closeModal('logout-modal')">✕</button>
+      </div>
+      <div class="modal-sub">You'll need to log back in to access your recordings.</div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal('logout-modal')">Cancel</button>
+        <button class="btn btn-primary" style="background:var(--danger);" onclick="confirmLogout()">Log out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ APP SHELL ============ -->
+  <div id="app">
+    <div class="topbar">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <button class="btn btn-icon" id="menu-toggle"
+          onclick="document.getElementById('sidebar').classList.toggle('open')">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+        <div class="mark">
+          <div class="mark-bars"><span></span><span></span><span></span><span></span><span></span></div>
+          <div class="mark-word">Echo<b>Note</b></div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-icon" onclick="openModal('settings-modal')" title="Backend settings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
+        <div class="user-chip" id="user-chip" onclick="document.getElementById('user-menu').classList.toggle('open')">
+          <div class="user-avatar" id="user-avatar">?</div>
+          <span id="user-email-short">—</span>
+          <div class="user-menu" id="user-menu">
+            <div class="user-menu-email" id="user-menu-email"></div>
+            <button onclick="loadJobs(true)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2">
+                <path d="M23 4v6h-6" />
+                <path d="M1 20v-6h6" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+              </svg> Refresh recordings</button>
+            <button class="danger"
+              onclick="document.getElementById('user-menu').classList.remove('open'); openModal('logout-modal')"><svg
+                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg> Log out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-head">
+          <button class="upload-btn" onclick="openModal('upload-modal')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            New recording
+          </button>
+          <div class="sidebar-title" id="sidebar-title">Recordings</div>
+        </div>
+        <div class="job-list" id="job-list">
+          <div class="job-empty">No recordings yet.<br>Upload your first one to get started.</div>
+        </div>
+      </aside>
+
+      <main class="workspace" id="workspace">
+        <div class="empty-state" id="empty-state">
+          <div class="empty-wave">
+            <span style="height:14px; animation-delay:0s"></span>
+            <span style="height:30px; animation-delay:.2s"></span>
+            <span style="height:20px; animation-delay:.4s"></span>
+            <span style="height:38px; animation-delay:.6s"></span>
+            <span style="height:16px; animation-delay:.8s"></span>
+            <span style="height:26px; animation-delay:1s"></span>
+          </div>
+          <h3>Select a recording</h3>
+          <p>Pick something from the list, or upload a new file to transcribe, summarize, and ask questions about it.
+          </p>
+        </div>
+
+        <div id="job-detail" style="display:none; flex:1; flex-direction:column; min-height:0;">
+          <div class="job-header">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <h2 id="detail-title">—</h2>
+                <button class="btn btn-icon" id="edit-title-btn" onclick="startTitleEdit()" title="Rename recording"
+                  style="padding:4px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                  </svg>
+                </button>
+                <span id="detail-purpose"
+                  style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:500; color:var(--text-muted); background:var(--surface-2); border:1px solid var(--border-soft); padding:3px 9px; border-radius:20px; flex-shrink:0;"></span>
+                <button class="btn btn-icon" id="delete-job-btn" onclick="handleDeleteJob()" title="Delete recording"
+                  style="padding:4px; color:var(--danger);">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+              </div>
+              <div class="job-sub" id="detail-sub">—</div>
+            </div>
+            <div class="job-header-wave" id="detail-wave"></div>
+          </div>
+          <div class="tabs">
+            <div class="tab active" data-tab="transcript" onclick="switchTab('transcript')">Transcript</div>
+            <div class="tab" data-tab="summary" onclick="switchTab('summary')">Summary</div>
+            <div class="tab" data-tab="ask" onclick="switchTab('ask')">Ask</div>
+            <div class="tab" data-tab="format" onclick="switchTab('format')">Export</div>
+          </div>
+          <div class="tab-panels">
+            <div class="tab-panel active" id="panel-transcript" data-panel="transcript"></div>
+            <div class="tab-panel" id="panel-summary" data-panel="summary"></div>
+            <div class="tab-panel" id="panel-format" data-panel="format"></div>
+            <div class="tab-panel ask-panel" id="panel-ask" data-panel="ask">
+              <div class="chat-scroll" id="chat-scroll"></div>
+              <div class="ask-inputbar">
+                <textarea id="ask-input" placeholder="Ask something about this recording…" rows="1"
+                  onkeydown="askKeydown(event)"></textarea>
+                <button class="send-btn" id="ask-send" onclick="sendQuestion()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                    <line x1="22" y1="2" x2="11" y2="13" />
+                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ============ UPLOAD MODAL ============ -->
+  <div class="modal-overlay" id="upload-modal-overlay">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>New recording</h3><button class="btn btn-icon" onclick="closeModal('upload-modal')">✕</button>
+      </div>
+      <div class="modal-sub">Upload an audio file to transcribe, diarize, and summarize.</div>
+
+      <div class="field field-title">
+        <label>Title (optional)</label>
+        <input type="text" id="upload-title" placeholder="e.g. Weekly sync — Aug 26">
+      </div>
+
+      <div class="field field-title">
+        <label>Recording type</label>
+        <select id="upload-purpose"
+          style="width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:var(--radius-sm); padding:11px 13px; font-size:14px;">
+          <option value="meeting">Meeting</option>
+          <option value="narrative">Narrative / story</option>
+          <option value="conference">Conference talk / presentation</option>
+          <option value="speech">Speech</option>
+        </select>
+      </div>
+
+      <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+        <div>Drop an audio file here, or click to browse</div>
+        <div class="fname" id="file-name"></div>
+        <input type="file" id="file-input" accept="audio/*" style="display:none"
+          onchange="handleFileSelect(this.files)">
+      </div>
+
+      <div class="upload-wave" id="upload-wave">
+        <span style="height:8px; animation-delay:0s"></span>
+        <span style="height:20px; animation-delay:.1s"></span>
+        <span style="height:14px; animation-delay:.2s"></span>
+        <span style="height:28px; animation-delay:.3s"></span>
+        <span style="height:10px; animation-delay:.4s"></span>
+        <span style="height:24px; animation-delay:.5s"></span>
+        <span style="height:16px; animation-delay:.6s"></span>
+        <span style="height:22px; animation-delay:.7s"></span>
+      </div>
+
+      <button class="btn btn-primary" id="upload-submit" onclick="handleUpload()" disabled>Upload &amp; process</button>
+    </div>
+  </div>
+
+  <!-- ============ SETTINGS MODAL ============ -->
+  <div class="modal-overlay" id="settings-modal-overlay">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Connection settings</h3><button class="btn btn-icon" onclick="closeModal('settings-modal')">✕</button>
+      </div>
+      <div class="modal-sub">Point EchoNote at your API and Supabase project.</div>
+      <div class="settings-note">Stored only in this browser tab's memory — nothing is saved to disk or synced. You'll
+        re-enter these if you reload the page.</div>
+      <div class="field"><label>Backend API URL</label><input type="text" id="set-backend"
+          placeholder="https://your-ngrok-url.ngrok-free.app"></div>
+      <div class="field"><label>Supabase project URL</label><input type="text" id="set-supabase-url"
+          placeholder="https://xxxx.supabase.co"></div>
+      <div class="field"><label>Supabase anon key</label><input type="text" id="set-supabase-key"
+          placeholder="eyJhbGciOi..."></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal('settings-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================
+       CONFIG — fill these in once and re-host the file. End users
+       never see or enter these; the Settings modal is only kept
+       around as a manual override (handy for your own debugging).
+    
+       SUPABASE_URL / SUPABASE_ANON_KEY are safe to ship in frontend
+       code — they are public by design, and your data stays
+       protected by Supabase Row Level Security, not by keeping
+       these secret. The service_role key is a real secret and must
+       NEVER appear here — it belongs only in your backend's server
+       environment.
+    
+       BACKEND_URL is your FastAPI server's base URL. Since you're
+       still on ngrok, this changes every time ngrok restarts — update
+       this one line and re-host the file when that happens. Once you
+       move to a stable host (Render, Railway, Fly.io, etc.) this
+       becomes a permanent set-and-forget value too.
+       ========================================================= */
+    const CONFIG = {
+      SUPABASE_URL: 'YOUR_SUPABASE_URL', // <- e.g. https://xxxx.supabase.co
+      SUPABASE_ANON_KEY: 'YOUR_SUPABASE_ANON_KEY',
+      BACKEND_URL: 'YOUR_BACKEND_URL', // <- update on every ngrok restart
+    };
+
+    /* =========================================================
+       STATE — everything lives in memory only (no localStorage:
+       this file is meant to run as a preview artifact as well as
+       a standalone page). Logging out wipes all of it explicitly —
+       that's the fix for the "stale data after logout" bug.
+       ========================================================= */
+    const state = {
+      backendUrl: CONFIG.BACKEND_URL,
+      supabaseUrl: CONFIG.SUPABASE_URL,
+      supabaseAnonKey: CONFIG.SUPABASE_ANON_KEY,
+      accessToken: null,
+      refreshToken: null,
+      user: null,
+      jobs: [],
+      currentJobId: null,
+      currentJob: null,
+      messages: [],
+      authMode: 'login', // 'login' | 'signup'
+      selectedFile: null,
+      pollTimer: null,
+    };
+
+    const PURPOSE_LABELS = {
+      meeting: 'Meeting',
+      narrative: 'Narrative / Story',
+      conference: 'Conference talk',
+      speech: 'Speech',
+    };
+
+    function purposeLabel(p) {
+      return PURPOSE_LABELS[p] || (p ? p.charAt(0).toUpperCase() + p.slice(1) : 'Meeting');
+    }
+
+    function persistSession() {
+      localStorage.setItem('EchoNote_session', JSON.stringify({
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
+        user: state.user,
+        backendUrl: state.backendUrl,
+        supabaseUrl: state.supabaseUrl,
+        supabaseAnonKey: state.supabaseAnonKey,
+        cachedJobs: state.jobs,
+      }));
+    }
+
+    function restoreSession() {
+      const raw = localStorage.getItem('EchoNote_session');
+      if (!raw) return false;
+      try {
+        const saved = JSON.parse(raw);
+        Object.assign(state, saved);
+        if (saved.cachedJobs) state.jobs = saved.cachedJobs;
+        return !!state.accessToken;
+      } catch (e) { return false; }
+    }
+
+    function resetSessionState() {
+      state.accessToken = null;
+      state.refreshToken = null;
+      state.user = null;
+      state.jobs = [];
+      state.currentJobId = null;
+      state.currentJob = null;
+      state.messages = [];
+      state.selectedFile = null;
+      if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+      renderJobList();
+      showEmptyWorkspace();
+    }
+
+    /* ---------- Toast ---------- */
+    let toastTimer;
+    function toast(msg, isErr) {
+      const t = document.getElementById('toast');
+      document.getElementById('toast-text').textContent = msg;
+      t.classList.toggle('err', !!isErr);
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+    }
+
+    function showLanding() {
+      if (state.accessToken) return;
+      document.getElementById('landing-screen').classList.add('show');
+      document.getElementById('auth-screen').style.display = 'none';
+    }
+    function showAuth(mode) {
+      if (state.accessToken) return;
+      document.getElementById('landing-screen').classList.remove('show');
+      document.getElementById('auth-screen').style.display = 'flex';
+      if (mode && mode !== state.authMode) { toggleAuthMode(); }
+    }
+
+    /* ---------- Modals ---------- */
+    function openModal(id) {
+      document.getElementById(id + '-overlay').classList.add('open');
+      if (id === 'settings-modal') {
+        document.getElementById('set-backend').value = state.backendUrl;
+        document.getElementById('set-supabase-url').value = state.supabaseUrl;
+        document.getElementById('set-supabase-key').value = state.supabaseAnonKey;
+      }
+    }
+    function closeModal(id) { document.getElementById(id + '-overlay').classList.remove('open'); }
+    function saveSettings() {
+      state.backendUrl = document.getElementById('set-backend').value.trim().replace(/\/$/, '');
+      state.supabaseUrl = document.getElementById('set-supabase-url').value.trim().replace(/\/$/, '');
+      state.supabaseAnonKey = document.getElementById('set-supabase-key').value.trim();
+      persistSession();
+      closeModal('settings-modal');
+      toast('Connection settings saved for this session');
+    }
+
+    /* ---------- Ambient background waveform (canvas) ---------- */
+    (function backgroundWaves() {
+      const canvas = document.getElementById('bg-canvas');
+      const ctx = canvas.getContext('2d');
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      const layers = [
+        { color: 'rgba(168,85,247,0.10)', amp: 46, freq: 0.006, speed: 0.012, yOffset: 0.30 },
+        { color: 'rgba(20,200,142,0.08)', amp: 60, freq: 0.004, speed: -0.008, yOffset: 0.55 },
+        { color: 'rgba(244,63,94,0.06)', amp: 38, freq: 0.008, speed: 0.006, yOffset: 0.75 },
+        { color: 'rgba(168,85,247,0.05)', amp: 70, freq: 0.003, speed: -0.004, yOffset: 0.15 },
+      ];
+
+      let w, h, t = 0;
+      function resize() {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      function drawFrame() {
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#FAF7FF';
+        ctx.fillRect(0, 0, w, h);
+
+        layers.forEach(layer => {
+          ctx.beginPath();
+          const baseY = h * layer.yOffset;
+          ctx.moveTo(0, baseY);
+          for (let x = 0; x <= w; x += 6) {
+            const y = baseY + Math.sin(x * layer.freq + t * layer.speed) * layer.amp
+              + Math.sin(x * layer.freq * 2.3 + t * layer.speed * 1.7) * (layer.amp * 0.35);
+            ctx.lineTo(x, y);
+          }
+          ctx.lineTo(w, h);
+          ctx.lineTo(0, h);
+          ctx.closePath();
+          ctx.fillStyle = layer.color;
+          ctx.fill();
+        });
+      }
+
+      if (reduceMotion) { drawFrame(); return; }
+      function loop() { t += 1; drawFrame(); requestAnimationFrame(loop); }
+      loop();
+    })();
+
+    /* ---------- Auth mode toggle ---------- */
+    function toggleAuthMode() {
+      state.authMode = state.authMode === 'login' ? 'signup' : 'login';
+      const isSignup = state.authMode === 'signup';
+      document.getElementById('auth-submit').textContent = isSignup ? 'Create account' : 'Log in';
+      document.getElementById('auth-submit').setAttribute('onclick', 'handleAuthSubmit()');
+      document.getElementById('auth-switch').innerHTML = isSignup
+        ? 'Already have an account? <a onclick="toggleAuthMode()">Log in</a>'
+        : 'New here? <a onclick="toggleAuthMode()">Create an account</a>';
+      document.getElementById('field-fullname').style.display = isSignup ? 'block' : 'none';
+      document.getElementById('field-dob').style.display = isSignup ? 'block' : 'none';
+      document.getElementById('field-confirm-password').style.display = isSignup ? 'block' : 'none';
+      document.getElementById('field-invite').style.display = isSignup ? 'block' : 'none';
+      hideAuthError();
+    }
+    function showAuthError(msg) {
+      const el = document.getElementById('auth-error');
+      el.textContent = msg; el.classList.add('show');
+    }
+    function hideAuthError() { document.getElementById('auth-error').classList.remove('show'); }
+
+    /* ---------- Supabase auth (direct REST — no SDK needed) ---------- */
+    async function handleAuthSubmit() {
+      hideAuthError();
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value;
+      const isSignup = state.authMode === 'signup';
+
+      if (!state.supabaseUrl || !state.supabaseAnonKey) {
+        showAuthError('Set your Supabase project URL and anon key in Settings first.');
+        return;
+      }
+      if (!email || !password) { showAuthError('Enter both email and password.'); return; }
+
+      let fullName, dob, inviteCode;
+      if (isSignup) {
+        fullName = document.getElementById('auth-fullname').value.trim();
+        dob = document.getElementById('auth-dob').value;
+        const confirmPassword = document.getElementById('auth-confirm-password').value;
+        inviteCode = document.getElementById('auth-invite').value.trim();
+
+        if (!fullName) { showAuthError('Enter your full name.'); return; }
+        if (!dob) { showAuthError('Enter your date of birth.'); return; }
+        if (password !== confirmPassword) { showAuthError('Passwords do not match.'); return; }
+        if (!inviteCode) { showAuthError('Enter your invite code.'); return; }
+      }
+
+      const btn = document.getElementById('auth-submit');
+      btn.disabled = true;
+      const originalText = btn.textContent;
+      btn.textContent = isSignup ? 'Creating account…' : 'Logging in…';
+
+      try {
+        let data;
+        if (isSignup) {
+          if (!state.backendUrl) throw new Error('Set your backend API URL in Settings.');
+          const res = await fetch(`${state.backendUrl}/auth/signup`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+            },
+            body: JSON.stringify({ email, password, full_name: fullName, date_of_birth: dob, invite_code: inviteCode }),
+          });
+          data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.detail || 'Signup failed');
+          }
+        } else {
+          const res = await fetch(`${state.supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': state.supabaseAnonKey,
+            },
+            body: JSON.stringify({ email, password }),
+          });
+          data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error_description || data.msg || data.error || 'Authentication failed');
+          }
+        }
+
+        state.accessToken = data.access_token;
+        state.refreshToken = data.refresh_token;
+        state.user = data.user;
+        enterApp();
+      } catch (err) {
+        showAuthError(err.message || 'Something went wrong. Check your Settings and try again.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    }
+
+    function enterApp() {
+      document.getElementById('landing-screen').classList.remove('show');
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('app').classList.add('show');
+      const email = state.user?.email || 'you';
+      const fullName = state.user?.user_metadata?.full_name;
+      document.getElementById('user-email-short').textContent = fullName || email.split('@')[0];
+      document.getElementById('user-menu-email').textContent = email;
+      document.getElementById('user-avatar').textContent = (fullName || email)[0]?.toUpperCase() || '?';
+
+      // Show whatever we cached from last session instantly, then refresh silently
+      if (state.jobs && state.jobs.length) {
+        renderJobList();
+      }
+      persistSession();
+      loadJobs();
+    }
+
+    /* THE FIX from the earlier bug report: logout explicitly clears
+       every piece of in-memory job/chat state, not just the token,
+       so nothing stale lingers without a manual page reload. */
+
+    function confirmLogout() {
+      closeModal('logout-modal');
+      handleLogout();
+    }
+    async function handleLogout() {
+      document.getElementById('user-menu').classList.remove('open');
+      try {
+        if (state.supabaseUrl && state.accessToken) {
+          await fetch(`${state.supabaseUrl}/auth/v1/logout`, {
+            method: 'POST',
+            headers: { 'apikey': state.supabaseAnonKey, 'Authorization': `Bearer ${state.accessToken}` }
+          });
+        }
+      } catch (e) { /* non-fatal — proceed to clear local state regardless */ }
+
+      resetSessionState();
+      localStorage.removeItem('EchoNote_session');
+      document.getElementById('app').classList.remove('show');
+      showLanding();
+      document.getElementById('auth-email').value = '';
+      document.getElementById('auth-password').value = '';
+      document.getElementById('auth-fullname').value = '';
+      document.getElementById('auth-dob').value = '';
+      document.getElementById('auth-confirm-password').value = '';
+      document.getElementById('auth-invite').value = '';
+      hideAuthError();
+      toast('Logged out');
+    }
+
+    document.addEventListener('click', (e) => {
+      const chip = document.getElementById('user-chip');
+      if (chip && !chip.contains(e.target)) document.getElementById('user-menu').classList.remove('open');
+    });
+
+    /* ---------- Backend API wrapper ---------- */
+    async function api(path, opts = {}) {
+      if (!state.backendUrl) { throw new Error('Set your backend API URL in Settings.'); }
+      const headers = Object.assign({}, opts.headers || {});
+      headers['ngrok-skip-browser-warning'] = 'true';
+      if (state.accessToken) headers['Authorization'] = `Bearer ${state.accessToken}`;
+      if (opts.json) { headers['Content-Type'] = 'application/json'; }
+      const res = await fetch(`${state.backendUrl}${path}`, {
+        method: opts.method || 'GET',
+        headers,
+        body: opts.json ? JSON.stringify(opts.json) : opts.body,
+      });
+      if (!res.ok) {
+        let msg = `Request failed (${res.status})`;
+        try { const d = await res.json(); msg = d.detail || d.message || msg; } catch (e) { }
+        throw new Error(msg);
+      }
+      const ct = res.headers.get('content-type') || '';
+      return ct.includes('application/json') ? res.json() : res.text();
+    }
+
+    /* ---------- Jobs (recordings) ---------- */
+    async function loadJobs(manual) {
+      try {
+        const data = await api('/my-jobs');
+        state.jobs = Array.isArray(data) ? data : (data.jobs || []);
+        renderJobList();
+        persistSession();
+        if (manual) toast('Recordings refreshed');
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+
+    function statusClass(s) {
+      const k = (s || '').toLowerCase();
+      return 'status-' + (k || 'queued');
+    }
+    function statusLabel(s) {
+      return (s || 'queued').replace(/_/g, ' ');
+    }
+    function parseAsUtc(d) {
+      if (!d) return null;
+      // If the string has no timezone marker (no trailing Z, and no +HH:MM / -HH:MM offset
+      // after the time), Postgres/Supabase is giving us a UTC timestamp with the marker
+      // stripped — JS would otherwise wrongly assume it's already local time.
+      const hasTimezone = /Z$|[+-]\d{2}:?\d{2}$/.test(d);
+      return new Date(hasTimezone ? d : d + 'Z');
+    }
+
+    function fmtDate(d) {
+      if (!d) return '—';
+      try {
+        const date = parseAsUtc(d);
+        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' +
+          date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      } catch (e) { return d; }
+    }
+
+    function renderJobList() {
+      const list = document.getElementById('job-list');
+      if (!state.jobs.length) {
+        list.innerHTML = '<div class="job-empty">No recordings yet.<br>Upload your first one to get started.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      state.jobs.forEach((job, i) => {
+        const id = job.id || job.job_id;
+        const el = document.createElement('div');
+        el.className = 'job-card' + (id === state.currentJobId ? ' active' : '');
+        el.style.animationDelay = (i * 0.03) + 's';
+        const title = job.title || job.filename || `Recording ${id?.toString().slice(0, 6) || i + 1}`;
+        const isBusy = ['uploading', 'processing', 'transcribing', 'queued', 'diarizing', 'summarizing', 'formatting', 'generating files'].includes((job.status || '').toLowerCase());
+        el.innerHTML = `
+      <div class="job-top">
+        <div class="job-title">${escapeHtml(title)}</div>
+      </div>
+      <div class="job-meta">
+        <span class="job-date">${fmtDate(job.created_at || job.created)}</span>
+        <span class="status-pill ${statusClass(job.status)}"><span class="status-dot"></span>${statusLabel(job.status)}</span>
+      </div>
+      ${isBusy ? miniWaveHTML() : ''}
+    `;
+        el.onclick = () => selectJob(id);
+        list.appendChild(el);
+      });
+    }
+    function miniWaveHTML() {
+      let bars = '';
+      for (let i = 0; i < 14; i++) {
+        const h = 3 + Math.round(Math.random() * 9);
+        bars += `<span style="height:${h}px; animation: idlewave ${(0.8 + Math.random() * 0.8).toFixed(2)}s ease-in-out infinite; animation-delay:${(Math.random() * 0.6).toFixed(2)}s"></span>`;
+      }
+      return `<div class="mini-wave" style="margin-top:6px;">${bars}</div>`;
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function renderMarkdownFromEscaped(raw) {
+      if (!raw) return '';
+      let s = raw.replace(/\r\n/g, '\n');
+
+      // normalize: some backends return markdown with no real line breaks —
+      // force each marker onto its own line before parsing
+      s = s.replace(/[ \t]*(#{1,6}[ \t])/g, '\n$1');
+      s = s.replace(/[ \t]*(-{3,}|_{3,})[ \t]*/g, '\n$1\n');
+      s = s.replace(/[ \t]*(?<!\*)\*(?!\*)[ \t]+/g, '\n* ');
+
+      // horizontal rules on their own line — drop them
+      s = s.replace(/^[ \t]*(-{3,}|\*{3,}|_{3,})[ \t]*$/gm, '');
+
+      // headers: only capture a leading bold run as the title, so a header
+      // that runs straight into paragraph text doesn't swallow the paragraph
+      s = s.replace(/^#{1,6}[ \t]*(\*\*[^\n*]+?\*\*)[ \t]*/gm, '<h4>$1</h4>\n\n');
+      s = s.replace(/^#{1,6}[ \t]*(.*)$/gm, '<h4>$1</h4>');
+
+      // bold / italic / inline code
+      s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      s = s.replace(/__(.+?)__/g, '<strong>$1</strong>');
+      s = s.replace(/(^|[^*])\*([^*\n]+)\*([^*]|$)/g, '$1<em>$2</em>$3');
+      s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+      // bullets
+      s = s.replace(/^[ \t]*[-*][ \t]+(.*)$/gm, (m, body) => {
+        body = body.replace(/^-\s+/, '');
+        return `<li>${body}</li>`;
+      });
+      s = s.replace(/(<li>[\s\S]*?<\/li>(?:\n?<li>[\s\S]*?<\/li>)*)/g, '<ul>$1</ul>');
+
+      // remaining non-empty lines become paragraphs
+      s = s.split(/\n{1,}/).map(block => {
+        block = block.trim();
+        if (!block) return '';
+        return /^<(h\d|ul|li)/.test(block) ? block : `<p>${block}</p>`;
+      }).join('');
+
+      return s;
+    }
+
+    function applyRealConfidenceSpans(rawText, spans) {
+      if (!rawText) return '';
+      if (!spans || !spans.length) return escapeHtml(rawText);
+      const sorted = spans
+        .filter(s => s && s.start != null && s.end != null && s.end > s.start)
+        .sort((a, b) => a.start - b.start);
+      let result = '';
+      let cursor = 0;
+      sorted.forEach(span => {
+        const start = Math.max(span.start, cursor);
+        const end = Math.max(span.end, start);
+        if (start > cursor) result += escapeHtml(rawText.slice(cursor, start));
+        if (end > start) {
+          const pct = Math.round((span.confidence ?? 0) * 100);
+          result += `<mark class="flag" title="Model confidence: ${pct}% — worth checking against the transcript">${escapeHtml(rawText.slice(start, end))}</mark>`;
+        }
+        cursor = Math.max(cursor, end);
+      });
+      if (cursor < rawText.length) result += escapeHtml(rawText.slice(cursor));
+      return result;
+    }
+
+    function locateWordSpans(rawText, wordConfidenceList) {
+      if (!rawText || !wordConfidenceList || !wordConfidenceList.length) return [];
+      let cursor = 0;
+      const spans = [];
+      wordConfidenceList.forEach(wc => {
+        const word = (wc.word || '').trim();
+        if (!word) return;
+        const idx = rawText.indexOf(word, cursor);
+        if (idx === -1) return;
+        spans.push({ start: idx, end: idx + word.length, confidence: wc.confidence, time: wc.start });
+        cursor = idx + word.length;
+      });
+      return spans;
+    }
+
+    function fmtTime(seconds) {
+      if (seconds == null) return '';
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function renderMistakesList(items) {
+      if (!items || !items.length) return '';
+      const rows = items.map(it => `
+    <div class="mistakes-item">
+      <span class="snippet">${escapeHtml(it.text)}</span>
+      ${it.time != null ? `<span class="time">${fmtTime(it.time)}</span>` : ''}
+      <span class="pct">${Math.round(it.confidence * 100)}%</span>
+    </div>
+  `).join('');
+      return `
+    <details class="mistakes-section">
+      <summary class="mistakes-toggle">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 18 15 12 9 6"/></svg>
+        Possible mistakes <span class="mistakes-count">${items.length}</span>
+      </summary>
+      <div class="mistakes-list">${rows}</div>
+    </details>
+  `;
+    }
+
+    function toggleExportMenu(e, kind) {
+      e.stopPropagation();
+      document.querySelectorAll('.export-menu').forEach(m => {
+        if (m.id !== `export-menu-${kind}`) m.classList.remove('open');
+      });
+      document.getElementById(`export-menu-${kind}`).classList.toggle('open');
+    }
+    document.addEventListener('click', () => {
+      document.querySelectorAll('.export-menu').forEach(m => m.classList.remove('open'));
+    });
+
+    function triggerDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function formattedOutputToText(job) {
+      let data;
+      try { data = JSON.parse(job.formatted_output); } catch (e) { return ''; }
+      if (data.error) return '';
+
+      const purpose = job.purpose;
+      if (purpose === 'meeting') {
+        return `Subject: ${data.subject || ''}\n\n${data.body || ''}`;
+      }
+      if (purpose === 'conference' || purpose === 'speech') {
+        const quotes = (data.quotes || []).map(q => `"${q.quote}"\n— ${q.context || ''}`).join('\n\n');
+        return `Recap:\n${data.recap || ''}\n\nQuotes:\n\n${quotes}`;
+      }
+      if (purpose === 'narrative') {
+        return (data.pages || []).map(p => `${p.heading || ''}\n\n${p.text || ''}`).join('\n\n---\n\n');
+      }
+      return '';
+    }
+
+    function exportContent(kind, format) {
+      document.querySelectorAll('.export-menu').forEach(m => m.classList.remove('open'));
+      const job = state.currentJob;
+      if (!job) return;
+
+      const isTranscript = kind === 'transcript';
+      const isFormat = kind === 'format';
+      const rawText = isTranscript
+        ? ((job.purpose === 'meeting' && job.speaker_transcript) ? job.speaker_transcript : (job.transcript || ''))
+        : (job.summary || '');
+      const title = isTranscript ? 'Transcript' : 'Summary';
+      const baseName = (job.title || job.filename || 'recording')
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[^a-z0-9\-_]+/gi, '_');
+      const filename = `${baseName}_${kind}`;
+
+      if (format === 'txt') {
+        triggerDownload(new Blob([rawText], { type: 'text/plain' }), `${filename}.txt`);
+      } else if (format === 'md') {
+        triggerDownload(new Blob([rawText], { type: 'text/markdown' }), `${filename}.md`);
+      } else if (format === 'pdf') {
+        if (typeof window.jspdf === 'undefined') {
+          toast('PDF export failed to load — check your connection and try again', true);
+          return;
+        }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+        const margin = 48;
+        const maxWidth = doc.internal.pageSize.getWidth() - margin * 2;
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+        doc.text(title, margin, margin);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+        const cleanText = rawText.replace(/[#*_`]/g, ''); // strip markdown symbols for a clean printed page
+        const lines = doc.splitTextToSize(cleanText, maxWidth);
+        let y = margin + 28;
+        const lineHeight = 15;
+        const pageBottom = doc.internal.pageSize.getHeight() - margin;
+        lines.forEach(line => {
+          if (y > pageBottom) { doc.addPage(); y = margin; }
+          doc.text(line, margin, y);
+          y += lineHeight;
+        });
+        doc.save(`${filename}.pdf`);
+      }
+      toast(`${title} exported as .${format}`);
+    }
+
+    function renderModelOutput(raw, confidenceSpans) {
+      if (!raw) return '';
+      const flaggedEscaped = applyRealConfidenceSpans(raw, confidenceSpans);
+      return renderMarkdownFromEscaped(flaggedEscaped);
+    }
+
+    function showEmptyWorkspace() {
+      document.getElementById('empty-state').style.display = 'flex';
+      document.getElementById('job-detail').style.display = 'none';
+    }
+
+    async function selectJob(id) {
+      state.currentJobId = id;
+      renderJobList();
+      document.getElementById('sidebar').classList.remove('open');
+      document.getElementById('empty-state').style.display = 'none';
+      document.getElementById('job-detail').style.display = 'flex';
+
+      const job = state.jobs.find(j => (j.id || j.job_id) === id) || {};
+      state.currentJob = job;
+      renderJobHeader(job);
+      switchTab('transcript');
+      renderTranscriptPanel(job);
+      renderSummaryPanel(job);
+      renderFormatPanel(job);
+      await loadMessages(id);
+
+      if (state.pollTimer) clearInterval(state.pollTimer);
+      const busy = ['uploading', 'processing', 'transcribing', 'queued', 'diarizing', 'summarizing', 'formatting', 'generating files'].includes((job.status || '').toLowerCase());
+      if (busy) {
+        state.pollTimer = setInterval(() => pollStatus(id), 4000);
+      }
+    }
+
+    function renderJobHeader(job) {
+      const title = job.title || job.filename || 'Untitled recording';
+      document.getElementById('detail-title').textContent = title;
+      document.getElementById('detail-purpose').textContent = purposeLabel(job.purpose);
+      document.getElementById('detail-sub').textContent =
+        `${fmtDate(job.created_at || job.created)} · ${statusLabel(job.status)}`;
+      const waveWrap = document.getElementById('detail-wave');
+      waveWrap.innerHTML = '';
+      const busy = ['uploading', 'processing', 'transcribing', 'queued', 'diarizing', 'summarizing', 'formatting', 'generating files'].includes((job.status || '').toLowerCase());
+      const n = 16;
+      for (let i = 0; i < n; i++) {
+        const bar = document.createElement('span');
+        const h = 6 + Math.round(Math.random() * 18);
+        bar.style.height = h + 'px';
+        if (busy) {
+          bar.style.animation = `idlewave ${(0.7 + Math.random() * 0.6).toFixed(2)}s ease-in-out infinite`;
+          bar.style.animationDelay = (Math.random() * 0.5).toFixed(2) + 's';
+        } else if ((job.status || '').toLowerCase().match(/error|failed/)) {
+          bar.style.background = 'var(--danger)';
+          bar.style.height = '3px';
+        } else {
+          bar.style.background = 'var(--teal)';
+        }
+        waveWrap.appendChild(bar);
+      }
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === name));
+      if (name === 'ask') {
+        const cs = document.getElementById('chat-scroll');
+        cs.scrollTop = cs.scrollHeight;
+      }
+    }
+
+    function splitSpeakerTurns(text) {
+      const regex = /(SPEAKER_\d+):\s*/g;
+      let match;
+      const markers = [];
+      while ((match = regex.exec(text)) !== null) {
+        markers.push({ speaker: match[1], textStart: regex.lastIndex });
+      }
+      if (!markers.length) return null;
+
+      const turns = [];
+      for (let i = 0; i < markers.length; i++) {
+        let start = markers[i].textStart;
+        let end = (i + 1 < markers.length) ? text.indexOf(markers[i + 1].speaker + ':', start) : text.length;
+        if (end === -1) end = text.length;
+
+        // trim whitespace at the edges without losing track of real offsets
+        while (start < end && /\s/.test(text[start])) start++;
+        while (end > start && /\s/.test(text[end - 1])) end--;
+
+        turns.push({
+          speaker: markers[i].speaker.replace('_', ' '),
+          start, end,
+          text: text.slice(start, end),
+        });
+      }
+      return turns;
+    }
+
+    function renderTranscriptPanel(job) {
+      const el = document.getElementById('panel-transcript');
+      const busy = ['uploading', 'processing', 'transcribing', 'queued', 'diarizing', 'summarizing', 'formatting', 'generating files'].includes((job.status || '').toLowerCase());
+      if (busy) {
+        el.innerHTML = `<div class="processing-note">Transcribing and identifying speakers…<br>This updates automatically — no need to refresh.</div>`;
+        return;
+      }
+      const displayText = (job.purpose === 'meeting' && job.speaker_transcript) ? job.speaker_transcript : job.transcript;
+
+      if (displayText) {
+        const wordConfidence = job.transcript_word_confidence || [];
+        const spans = locateWordSpans(displayText, wordConfidence);
+        const mistakeItems = spans.map(s => ({
+          text: displayText.slice(s.start, s.end),
+          confidence: s.confidence,
+          time: s.time,
+        }));
+
+        const turns = job.purpose === 'meeting' ? splitSpeakerTurns(displayText) : null;
+
+        let bodyHtml;
+        if (turns) {
+          bodyHtml = turns.map(t => {
+            const localSpans = spans
+              .filter(s => s.start >= t.start && s.end <= t.end)
+              .map(s => ({ start: s.start - t.start, end: s.end - t.start, confidence: s.confidence, time: s.time }));
+            const highlightedTurn = applyRealConfidenceSpans(t.text, localSpans);
+            return `
+          <div class="transcript-line">
+            <span class="spk">${escapeHtml(t.speaker)}</span>
+            <span class="txt">${highlightedTurn}</span>
+          </div>
+        `;
+          }).join('');
+        } else {
+          const highlighted = applyRealConfidenceSpans(displayText, spans);
+          bodyHtml = `<div class="transcript-line" style="border:none;"><span class="txt">${highlighted}</span></div>`;
+        }
+
+        el.innerHTML = `
+      <div class="export-wrap">
+        <button class="file-link" onclick="toggleExportMenu(event,'transcript')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export transcript
+        </button>
+        <div class="export-menu" id="export-menu-transcript">
+          <button onclick="exportContent('transcript','txt')">Download .txt</button>
+          <button onclick="exportContent('transcript','md')">Download .md</button>
+          <button onclick="exportContent('transcript','pdf')">Download .pdf</button>
+        </div>
+      </div>
+      ${bodyHtml}
+      ${renderMistakesList(mistakeItems)}
+    `;
+      } else {
+        el.innerHTML = `<div class="processing-note">No transcript available for this recording yet.</div>`;
+      }
+    }
+
+    function startTitleEdit() {
+      const job = state.currentJob;
+      if (!job) return;
+      const current = job.title || job.filename || '';
+      const titleEl = document.getElementById('detail-title');
+      const input = document.createElement('input');
+      input.id = 'title-edit-input';
+      input.type = 'text';
+      input.value = current;
+      input.style.cssText = 'font-family:var(--font-display); font-size:19px; font-weight:600; background:var(--surface); border:1px solid var(--accent); border-radius:6px; padding:2px 8px; width:260px;';
+      titleEl.replaceWith(input);
+      input.focus();
+      input.select();
+      document.getElementById('edit-title-btn').style.display = 'none';
+
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { e.preventDefault(); input.dataset.cancelled = 'true'; input.blur(); }
+      });
+      input.addEventListener('blur', () => {
+        if (input.dataset.cancelled === 'true') restoreTitleDisplay(current);
+        else saveTitleEdit(input, current);
+      });
+    }
+
+    async function handleDeleteJob() {
+      const job = state.currentJob;
+      if (!job) return;
+      const id = state.currentJobId;
+      const title = job.title || job.filename || 'this recording';
+
+      if (!confirm(`Delete "${title}"? This will permanently remove the transcript, summary, and all Q&A history. This can't be undone.`)) {
+        return;
+      }
+
+      try {
+        const res = await api(`/jobs/${id}`, { method: 'DELETE' });
+        if (res.error) throw new Error(res.error);
+
+        state.jobs = state.jobs.filter(j => (j.id || j.job_id) !== id);
+        if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+        state.currentJobId = null;
+        state.currentJob = null;
+        renderJobList();
+        persistSession();
+        showEmptyWorkspace();
+        toast('Recording deleted');
+      } catch (err) {
+        toast(err.message || 'Failed to delete recording', true);
+      }
+    }
+
+    async function saveTitleEdit(input, oldTitle) {
+      const id = state.currentJobId;
+      const newTitle = input.value.trim();
+      if (!newTitle || newTitle === oldTitle) { restoreTitleDisplay(oldTitle); return; }
+
+      restoreTitleDisplay(newTitle); // optimistic
+      try {
+        const res = await api(`/jobs/${id}/title`, { method: 'PATCH', json: { title: newTitle } });
+        if (res.error) throw new Error(res.error);
+        state.currentJob.title = newTitle;
+        const idx = state.jobs.findIndex(j => (j.id || j.job_id) === id);
+        if (idx > -1) state.jobs[idx].title = newTitle;
+        renderJobList();
+        toast('Title updated');
+      } catch (err) {
+        restoreTitleDisplay(oldTitle);
+        toast(err.message || 'Failed to update title', true);
+      }
+    }
+
+    function restoreTitleDisplay(text) {
+      const input = document.getElementById('title-edit-input');
+      if (!input) return;
+      const h2 = document.createElement('h2');
+      h2.id = 'detail-title';
+      h2.textContent = text || '—';
+      input.replaceWith(h2);
+      document.getElementById('edit-title-btn').style.display = '';
+    }
+
+    function renderSummaryPanel(job) {
+      const el = document.getElementById('panel-summary');
+      const busy = ['uploading', 'processing', 'transcribing', 'queued', 'diarizing', 'summarizing', 'formatting', 'generating files'].includes((job.status || '').toLowerCase());
+      if (busy) {
+        el.innerHTML = `<div class="processing-note">Summary will appear once processing finishes.</div>`;
+        return;
+      }
+      if (job.summary) {
+        const spans = job.summary_confidence_spans || [];
+        const mistakeItems = spans.map(s => ({
+          text: job.summary.slice(s.start, s.end),
+          confidence: s.confidence,
+        }));
+        el.innerHTML = `
+      <div class="export-wrap">
+        <button class="file-link" onclick="toggleExportMenu(event,'summary')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export summary
+        </button>
+        <div class="export-menu" id="export-menu-summary">
+          <button onclick="exportContent('summary','txt')">Download .txt</button>
+          <button onclick="exportContent('summary','md')">Download .md</button>
+          <button onclick="exportContent('summary','pdf')">Download .pdf</button>
+        </div>
+      </div>
+      <div class="confidence-note">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span>Highlighted words are ones the model itself was least confident about — worth a quick check against the transcript.</span>
+      </div>
+      <div class="summary-block md">${renderModelOutput(job.summary, spans)}</div>
+      ${renderMistakesList(mistakeItems)}
+    `;
+      } else {
+        el.innerHTML = `<div class="processing-note">No summary available for this recording yet.</div>`;
+      }
+    }
+
+    function renderFormatPanel(job) {
+      const el = document.getElementById('panel-format');
+      const busyList = ['uploading', 'processing', 'transcribing', 'queued', 'diarizing', 'summarizing', 'formatting', 'generating files'];
+      if (busyList.includes((job.status || '').toLowerCase())) {
+        el.innerHTML = `<div class="processing-note">Your ${purposeLabel(job.purpose).toLowerCase()} export will appear here once processing finishes.</div>`;
+        return;
+      }
+      if (!job.formatted_output) {
+        el.innerHTML = `<div class="processing-note">No export available for this recording yet.</div>`;
+        return;
+      }
+
+      let data;
+      try { data = JSON.parse(job.formatted_output); } catch (e) {
+        el.innerHTML = `<div class="processing-note">Couldn't load the export for this recording.</div>`;
+        return;
+      }
+      if (data.error) {
+        el.innerHTML = `<div class="processing-note">${escapeHtml(data.error)}</div>`;
+        return;
+      }
+
+      const exportHeader = `
+      <div class="export-wrap">
+        <button class="file-link" onclick="toggleExportMenu(event,'format')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export
+        </button>
+        <div class="export-menu" id="export-menu-format">
+          <button onclick="exportContent('format','txt')">Download .txt</button>
+          <button onclick="exportContent('format','md')">Download .md</button>
+          <button onclick="exportContent('format','pdf')">Download .pdf</button>
+        </div>
+      </div>`;
+
+      const purpose = job.purpose;
+      if (purpose === 'meeting') {
+        el.innerHTML = `
+      <div class="summary-block">
+        <h4>Subject</h4>
+        <p>${escapeHtml(data.subject || '')}</p>
+        <h4>Email body</h4>
+        <div class="md">${renderMarkdownFromEscaped(escapeHtml(data.body || ''))}</div>
+        <button class="file-link" id="copy-email-btn" style="margin-top:14px;">Copy email</button>
+        <button class="file-link" id="open-gmail-btn" style="margin-top:14px; margin-left:8px;">Open in Gmail</button>
+      </div>`;
+        document.getElementById('copy-email-btn').onclick = () => {
+          copyFormatted((data.subject || '') + '\n\n' + (data.body || ''));
+        };
+        document.getElementById('open-gmail-btn').onclick = () => {
+          const url = `https://mail.google.com/mail/?view=cm&fs=1&su=${encodeURIComponent(data.subject || '')}&body=${encodeURIComponent(data.body || '')}`;
+          window.open(url, '_blank');
+        };
+      } else if (purpose === 'conference' || purpose === 'speech') {
+        const cards = (data.quotes || []).map(q => `
+      <div style="background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius-md); padding:16px; margin-bottom:10px;">
+        <div style="font-size:15px; font-weight:600; color:var(--text); line-height:1.5; margin-bottom:6px;">"${escapeHtml(q.quote)}"</div>
+        <div style="font-size:11.5px; color:var(--text-faint);">${escapeHtml(q.context || '')}</div>
+      </div>`).join('');
+        el.innerHTML = `
+      <div class="summary-block">
+        <h4>Recap</h4>
+        <p>${escapeHtml(data.recap || '')}</p>
+        <h4>Quote cards</h4>
+        ${cards}
+      </div>`;
+      } else if (purpose === 'narrative') {
+        const pages = (data.pages || []).map((p, i) => `
+      <div style="margin-bottom:26px;">
+        <h4>${escapeHtml(p.heading || `Part ${i + 1}`)}</h4>
+        <p style="white-space:pre-wrap;">${escapeHtml(p.text || '')}</p>
+      </div>`).join('');
+        el.innerHTML = exportHeader + `<div class="summary-block">${pages}</div>`;
+      } else {
+        el.innerHTML = `<div class="processing-note">No export format defined for this recording type.</div>`;
+      }
+    }
+
+    function copyFormatted(text) {
+      navigator.clipboard.writeText(text).then(() => toast('Copied to clipboard'));
+    }
+
+    async function pollStatus(id) {
+      try {
+        const data = await api(`/status/${id}`);
+        const idx = state.jobs.findIndex(j => (j.id || j.job_id) === id);
+        if (idx > -1) state.jobs[idx] = Object.assign({}, state.jobs[idx], data);
+        if (id === state.currentJobId) {
+          state.currentJob = state.jobs[idx] || data;
+          renderJobHeader(state.currentJob);
+          renderTranscriptPanel(state.currentJob);
+          renderSummaryPanel(state.currentJob);
+          renderFormatPanel(state.currentJob);
+        }
+        renderJobList();
+        const stillBusy = ['uploading', 'processing', 'transcribing', 'queued', 'diarizing', 'summarizing', 'formatting', 'generating files'].includes((data.status || '').toLowerCase());
+        if (!stillBusy && state.pollTimer) {
+          clearInterval(state.pollTimer);
+          state.pollTimer = null;
+          if (id === state.currentJobId) toast('Processing finished');
+        }
+      } catch (err) {
+        // quiet fail on poll — avoid spamming toasts
+      }
+    }
+
+    /* ---------- Ask / chat ---------- */
+    async function loadMessages(id) {
+      const scroll = document.getElementById('chat-scroll');
+      try {
+        const data = await api(`/jobs/${id}/messages`);
+        state.messages = Array.isArray(data) ? data : (data.messages || []);
+        renderChat();
+      } catch (err) {
+        state.messages = [];
+        renderChat();
+      }
+    }
+    function renderChat() {
+      const scroll = document.getElementById('chat-scroll');
+      if (!state.messages.length) {
+        scroll.innerHTML = `<div class="chat-empty">No questions asked yet.<br>Ask anything about this recording below.</div>`;
+        return;
+      }
+      scroll.innerHTML = state.messages.map((m, i) => {
+        const isUser = (m.role === 'user') || m.question !== undefined;
+        const text = m.content || m.question || m.answer || m.text || '';
+        if (m.question !== undefined && m.answer !== undefined) {
+          return `
+        <div class="msg msg-user" style="animation-delay:${i * 0.02}s"><div class="msg-bubble">${escapeHtml(m.question)}</div></div>
+        <div class="msg msg-ai" style="animation-delay:${i * 0.02 + 0.05}s"><div class="msg-bubble md">${renderModelOutput(m.answer, m.answer_confidence_spans)}</div></div>
+      `;
+        }
+        return `<div class="msg ${isUser ? 'msg-user' : 'msg-ai'}" style="animation-delay:${i * 0.02}s"><div class="msg-bubble${isUser ? '' : ' md'}">${isUser ? escapeHtml(text) : renderModelOutput(text, m.answer_confidence_spans)}</div></div>`;
+      }).join('');
+      scroll.scrollTop = scroll.scrollHeight;
+    }
+    function askKeydown(e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
+    }
+    async function sendQuestion() {
+      const input = document.getElementById('ask-input');
+      const q = input.value.trim();
+      if (!q || !state.currentJobId) return;
+      input.value = '';
+      const scroll = document.getElementById('chat-scroll');
+      if (scroll.querySelector('.chat-empty')) scroll.innerHTML = '';
+
+      const userMsg = document.createElement('div');
+      userMsg.className = 'msg msg-user';
+      userMsg.innerHTML = `<div class="msg-bubble">${escapeHtml(q)}</div>`;
+      scroll.appendChild(userMsg);
+
+      const thinking = document.createElement('div');
+      thinking.className = 'msg msg-ai';
+      thinking.innerHTML = `<div class="msg-bubble thinking"><span class="think-dot"></span><span class="think-dot"></span><span class="think-dot"></span></div>`;
+      scroll.appendChild(thinking);
+      scroll.scrollTop = scroll.scrollHeight;
+
+      document.getElementById('ask-send').disabled = true;
+      try {
+        const data = await api(`/ask/${state.currentJobId}`, { method: 'POST', json: { question: q } });
+        const answer = data.answer || data.response || data.content || 'No answer returned.';
+        thinking.innerHTML = `<div class="msg-bubble md">${renderModelOutput(answer, data.answer_confidence_spans)}</div>`;
+        state.messages.push({ question: q, answer, answer_confidence_spans: data.answer_confidence_spans });
+      } catch (err) {
+        thinking.innerHTML = `<div class="msg-bubble" style="color:#DB2777;">${escapeHtml(err.message)}</div>`;
+      } finally {
+        document.getElementById('ask-send').disabled = false;
+        scroll.scrollTop = scroll.scrollHeight;
+      }
+    }
+
+    /* ---------- Upload ---------- */
+    const dropzone = document.getElementById('dropzone');
+    ['dragover', 'dragenter'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('drag'); }));
+    ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('drag'); }));
+    dropzone.addEventListener('drop', e => { if (e.dataTransfer.files.length) handleFileSelect(e.dataTransfer.files); });
+
+    function handleFileSelect(files) {
+      if (!files || !files.length) return;
+      state.selectedFile = files[0];
+      document.getElementById('file-name').textContent = files[0].name;
+      document.getElementById('upload-submit').disabled = false;
+    }
+
+    async function handleUpload() {
+      if (!state.selectedFile) return;
+      const btn = document.getElementById('upload-submit');
+      btn.disabled = true;
+      btn.textContent = 'Uploading…';
+      document.getElementById('upload-wave').classList.add('active');
+
+      try {
+        const fd = new FormData();
+        fd.append('file', state.selectedFile);
+        const title = document.getElementById('upload-title').value.trim();
+        if (title) fd.append('title', title);
+        const purpose = document.getElementById('upload-purpose').value;
+
+        const headers = { 'ngrok-skip-browser-warning': 'true' };
+        if (state.accessToken) headers['Authorization'] = `Bearer ${state.accessToken}`;
+        const res = await fetch(`${state.backendUrl}/upload?purpose=${encodeURIComponent(purpose)}`, { method: 'POST', headers, body: fd });
+        if (!res.ok) {
+          let msg = `Upload failed (${res.status})`;
+          try { const d = await res.json(); msg = d.detail || msg; } catch (e) { }
+          throw new Error(msg);
+        }
+        const data = await res.json();
+        toast('Upload started — processing now');
+        closeModal('upload-modal');
+        resetUploadModal();
+        await loadJobs();
+        const newId = data.job_id || data.id;
+        if (newId) selectJob(newId);
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Upload & process';
+        document.getElementById('upload-wave').classList.remove('active');
+      }
+    }
+    function resetUploadModal() {
+      state.selectedFile = null;
+      document.getElementById('file-name').textContent = '';
+      document.getElementById('upload-title').value = '';
+      document.getElementById('upload-purpose').value = 'meeting';
+      document.getElementById('file-input').value = '';
+      document.getElementById('upload-submit').disabled = true;
+    }
+
+    /* ---------- Init ---------- */
+    document.getElementById('auth-email').addEventListener('keydown', e => { if (e.key === 'Enter') handleAuthSubmit(); });
+    document.getElementById('auth-password').addEventListener('keydown', e => { if (e.key === 'Enter') handleAuthSubmit(); });
+
+    (function init() {
+      if (restoreSession()) {
+        enterApp();
+        toast('Welcome back');
+        return;
+      }
+      showLanding();
+      const unfilled = state.supabaseUrl.includes('YOUR-') || state.supabaseAnonKey.includes('YOUR-') || state.backendUrl.includes('YOUR-');
+      if (unfilled) {
+        setTimeout(() => toast('Set your Supabase and backend URLs in Settings before logging in.'), 400);
+      }
+    })();
+
+    window.addEventListener('storage', (e) => {
+      if (e.key !== 'EchoNote_session') return;
+
+      if (!e.newValue) {
+        // Session was cleared in another tab — log this tab out too
+        resetSessionState();
+        document.getElementById('app').classList.remove('show');
+        showLanding();
+        hideAuthError();
+        toast('Logged out in another tab');
+        return;
+      }
+
+      try {
+        const saved = JSON.parse(e.newValue);
+        if (saved.accessToken && saved.accessToken !== state.accessToken) {
+          // Logged in (or switched accounts) in another tab — mirror it here
+          Object.assign(state, saved);
+          enterApp();
+          toast('Session updated from another tab');
+        }
+      } catch (err) { }
+    });
+  </script>
+</body>
+
+</html>
