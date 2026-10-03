@@ -10,3 +10,15 @@ __pycache__/
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Audio and generated files (uploads, test recordings, temp output)
+*.mp3
+*.wav
+*.m4a
+*.flac
+*.ogg
+*.aac
+*.opus
+*.3gp
+*.wma
+*_normalized.wav

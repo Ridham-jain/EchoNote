@@ -1319,6 +1319,103 @@
       background: var(--accent);
     }
 
+    .ts-btn {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent-strong);
+      background: var(--accent-soft);
+      border: none;
+      border-radius: 4px;
+      padding: 2px 6px;
+      height: 22px;
+      flex-shrink: 0;
+      width: 52px;
+    }
+
+    .ts-btn:hover {
+      background: rgba(168, 85, 247, 0.25);
+    }
+
+    .src-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border);
+    }
+
+    .src-label {
+      font-size: 11px;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .src-chip {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      color: var(--accent-strong);
+      border-radius: 20px;
+      padding: 2px 9px;
+    }
+
+    .src-chip:hover {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .rename-box {
+      margin: 0 0 16px;
+      background: var(--surface);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+    }
+
+    .rename-box summary {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .rename-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 10px;
+      margin: 12px 0;
+    }
+
+    .rename-grid label {
+      font-size: 11px;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .rename-grid input {
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 9px;
+      font-size: 13px;
+      color: var(--text);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .rename-grid input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
     .tabs {
       display: flex;
       gap: 2px;
@@ -1404,6 +1501,21 @@
 
     .transcript-line .txt {
       color: var(--text);
+    }
+
+    .seg {
+      cursor: pointer;
+      border-radius: 3px;
+      transition: background .12s;
+    }
+
+    .seg:hover {
+      background: var(--accent-soft);
+    }
+
+    .transcript-line .ts-btn {
+      align-self: flex-start;
+      margin-top: 2px;
     }
 
     .processing-note {
@@ -2241,6 +2353,9 @@
             </div>
             <div class="job-header-wave" id="detail-wave"></div>
           </div>
+          <div id="audio-wrap" style="display:none; padding:10px 26px; border-bottom:1px solid var(--border-soft);">
+            <audio id="audio-player" controls preload="metadata" style="width:100%; height:36px;"></audio>
+          </div>
           <div class="tabs">
             <div class="tab active" data-tab="transcript" onclick="switchTab('transcript')">Transcript</div>
             <div class="tab" data-tab="summary" onclick="switchTab('summary')">Summary</div>
@@ -2363,9 +2478,9 @@
        becomes a permanent set-and-forget value too.
        ========================================================= */
     const CONFIG = {
-      SUPABASE_URL: 'YOUR_SUPABASE_URL', // <- e.g. https://xxxx.supabase.co
-      SUPABASE_ANON_KEY: 'YOUR_SUPABASE_ANON_KEY',
-      BACKEND_URL: 'YOUR_BACKEND_URL', // <- update on every ngrok restart
+      SUPABASE_URL: 'https://inekcuagfmgnjsvbvlzm.supabase.co',
+      SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluZWtjdWFnZm1nbmpzdmJ2bHptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczMTc0NzksImV4cCI6MjEwMjg5MzQ3OX0.c9loUNcVkT4IqKyIWVXoW1q1z1D6l5cIHWcgk_I5__E',
+      BACKEND_URL: 'https://gamma-imperfect-vessel.ngrok-free.dev', // <- update on every ngrok restart
     };
 
     /* =========================================================
@@ -2409,7 +2524,7 @@
         backendUrl: state.backendUrl,
         supabaseUrl: state.supabaseUrl,
         supabaseAnonKey: state.supabaseAnonKey,
-        cachedJobs: state.jobs,
+        cachedJobs: state.jobs.map(({segments, transcript, speaker_transcript, display_transcript, formatted_output, transcript_word_confidence, audio_url, ...light}) => light),
       }));
     }
 
@@ -2421,7 +2536,7 @@
         Object.assign(state, saved);
         if (saved.cachedJobs) state.jobs = saved.cachedJobs;
         return !!state.accessToken;
-      } catch (e) { return false; }
+      } catch (e) {return false;}
     }
 
     function resetSessionState() {
@@ -2433,7 +2548,7 @@
       state.currentJob = null;
       state.messages = [];
       state.selectedFile = null;
-      if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+      if (state.pollTimer) {clearInterval(state.pollTimer); state.pollTimer = null;}
       renderJobList();
       showEmptyWorkspace();
     }
@@ -2458,7 +2573,7 @@
       if (state.accessToken) return;
       document.getElementById('landing-screen').classList.remove('show');
       document.getElementById('auth-screen').style.display = 'flex';
-      if (mode && mode !== state.authMode) { toggleAuthMode(); }
+      if (mode && mode !== state.authMode) {toggleAuthMode();}
     }
 
     /* ---------- Modals ---------- */
@@ -2470,7 +2585,7 @@
         document.getElementById('set-supabase-key').value = state.supabaseAnonKey;
       }
     }
-    function closeModal(id) { document.getElementById(id + '-overlay').classList.remove('open'); }
+    function closeModal(id) {document.getElementById(id + '-overlay').classList.remove('open');}
     function saveSettings() {
       state.backendUrl = document.getElementById('set-backend').value.trim().replace(/\/$/, '');
       state.supabaseUrl = document.getElementById('set-supabase-url').value.trim().replace(/\/$/, '');
@@ -2487,10 +2602,10 @@
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
       const layers = [
-        { color: 'rgba(168,85,247,0.10)', amp: 46, freq: 0.006, speed: 0.012, yOffset: 0.30 },
-        { color: 'rgba(20,200,142,0.08)', amp: 60, freq: 0.004, speed: -0.008, yOffset: 0.55 },
-        { color: 'rgba(244,63,94,0.06)', amp: 38, freq: 0.008, speed: 0.006, yOffset: 0.75 },
-        { color: 'rgba(168,85,247,0.05)', amp: 70, freq: 0.003, speed: -0.004, yOffset: 0.15 },
+        {color: 'rgba(168,85,247,0.10)', amp: 46, freq: 0.006, speed: 0.012, yOffset: 0.30},
+        {color: 'rgba(20,200,142,0.08)', amp: 60, freq: 0.004, speed: -0.008, yOffset: 0.55},
+        {color: 'rgba(244,63,94,0.06)', amp: 38, freq: 0.008, speed: 0.006, yOffset: 0.75},
+        {color: 'rgba(168,85,247,0.05)', amp: 70, freq: 0.003, speed: -0.004, yOffset: 0.15},
       ];
 
       let w, h, t = 0;
@@ -2522,8 +2637,8 @@
         });
       }
 
-      if (reduceMotion) { drawFrame(); return; }
-      function loop() { t += 1; drawFrame(); requestAnimationFrame(loop); }
+      if (reduceMotion) {drawFrame(); return;}
+      function loop() {t += 1; drawFrame(); requestAnimationFrame(loop);}
       loop();
     })();
 
@@ -2546,7 +2661,7 @@
       const el = document.getElementById('auth-error');
       el.textContent = msg; el.classList.add('show');
     }
-    function hideAuthError() { document.getElementById('auth-error').classList.remove('show'); }
+    function hideAuthError() {document.getElementById('auth-error').classList.remove('show');}
 
     /* ---------- Supabase auth (direct REST — no SDK needed) ---------- */
     async function handleAuthSubmit() {
@@ -2559,7 +2674,7 @@
         showAuthError('Set your Supabase project URL and anon key in Settings first.');
         return;
       }
-      if (!email || !password) { showAuthError('Enter both email and password.'); return; }
+      if (!email || !password) {showAuthError('Enter both email and password.'); return;}
 
       let fullName, dob, inviteCode;
       if (isSignup) {
@@ -2568,10 +2683,10 @@
         const confirmPassword = document.getElementById('auth-confirm-password').value;
         inviteCode = document.getElementById('auth-invite').value.trim();
 
-        if (!fullName) { showAuthError('Enter your full name.'); return; }
-        if (!dob) { showAuthError('Enter your date of birth.'); return; }
-        if (password !== confirmPassword) { showAuthError('Passwords do not match.'); return; }
-        if (!inviteCode) { showAuthError('Enter your invite code.'); return; }
+        if (!fullName) {showAuthError('Enter your full name.'); return;}
+        if (!dob) {showAuthError('Enter your date of birth.'); return;}
+        if (password !== confirmPassword) {showAuthError('Passwords do not match.'); return;}
+        if (!inviteCode) {showAuthError('Enter your invite code.'); return;}
       }
 
       const btn = document.getElementById('auth-submit');
@@ -2589,7 +2704,7 @@
               'Content-Type': 'application/json',
               'ngrok-skip-browser-warning': 'true',
             },
-            body: JSON.stringify({ email, password, full_name: fullName, date_of_birth: dob, invite_code: inviteCode }),
+            body: JSON.stringify({email, password, full_name: fullName, date_of_birth: dob, invite_code: inviteCode}),
           });
           data = await res.json();
           if (!res.ok) {
@@ -2602,7 +2717,7 @@
               'Content-Type': 'application/json',
               'apikey': state.supabaseAnonKey,
             },
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify({email, password}),
           });
           data = await res.json();
           if (!res.ok) {
@@ -2654,10 +2769,10 @@
         if (state.supabaseUrl && state.accessToken) {
           await fetch(`${state.supabaseUrl}/auth/v1/logout`, {
             method: 'POST',
-            headers: { 'apikey': state.supabaseAnonKey, 'Authorization': `Bearer ${state.accessToken}` }
+            headers: {'apikey': state.supabaseAnonKey, 'Authorization': `Bearer ${state.accessToken}`}
           });
         }
-      } catch (e) { /* non-fatal — proceed to clear local state regardless */ }
+      } catch (e) { /* non-fatal — proceed to clear local state regardless */}
 
       resetSessionState();
       localStorage.removeItem('EchoNote_session');
@@ -2680,11 +2795,11 @@
 
     /* ---------- Backend API wrapper ---------- */
     async function api(path, opts = {}) {
-      if (!state.backendUrl) { throw new Error('Set your backend API URL in Settings.'); }
+      if (!state.backendUrl) {throw new Error('Set your backend API URL in Settings.');}
       const headers = Object.assign({}, opts.headers || {});
       headers['ngrok-skip-browser-warning'] = 'true';
       if (state.accessToken) headers['Authorization'] = `Bearer ${state.accessToken}`;
-      if (opts.json) { headers['Content-Type'] = 'application/json'; }
+      if (opts.json) {headers['Content-Type'] = 'application/json';}
       const res = await fetch(`${state.backendUrl}${path}`, {
         method: opts.method || 'GET',
         headers,
@@ -2692,7 +2807,7 @@
       });
       if (!res.ok) {
         let msg = `Request failed (${res.status})`;
-        try { const d = await res.json(); msg = d.detail || d.message || msg; } catch (e) { }
+        try {const d = await res.json(); msg = d.detail || d.message || msg;} catch (e) { }
         throw new Error(msg);
       }
       const ct = res.headers.get('content-type') || '';
@@ -2732,9 +2847,9 @@
       if (!d) return '—';
       try {
         const date = parseAsUtc(d);
-        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' +
-          date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-      } catch (e) { return d; }
+        return date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) + ' · ' +
+          date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'});
+      } catch (e) {return d;}
     }
 
     function renderJobList() {
@@ -2774,7 +2889,7 @@
       return `<div class="mini-wave" style="margin-top:6px;">${bars}</div>`;
     }
     function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      return String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
     }
 
     function renderMarkdownFromEscaped(raw) {
@@ -2849,7 +2964,7 @@
         if (!word) return;
         const idx = rawText.indexOf(word, cursor);
         if (idx === -1) return;
-        spans.push({ start: idx, end: idx + word.length, confidence: wc.confidence, time: wc.start });
+        spans.push({start: idx, end: idx + word.length, confidence: wc.confidence, time: wc.start});
         cursor = idx + word.length;
       });
       return spans;
@@ -2862,12 +2977,152 @@
       return `${m}:${s}`;
     }
 
+    const normWord = w => w.toLowerCase().replace(/[^\w']/g, '');
+
+    function seekTo(t) {
+      const a = document.getElementById('audio-player');
+      if (!a || !a.getAttribute('src')) {toast('Audio not available for this recording', true); return;}
+      const go = () => {a.currentTime = Number(t) || 0; a.play().catch(() => { });};
+      if (a.readyState >= 1) go(); else a.addEventListener('loadedmetadata', go, {once: true});
+    }
+
+    function renderAudioPlayer(job) {
+      const wrap = document.getElementById('audio-wrap');
+      const player = document.getElementById('audio-player');
+      if (!job || !job.audio_url) {
+        wrap.style.display = 'none';
+        player.pause();
+        player.removeAttribute('src');
+        player.dataset.jobId = '';
+        return;
+      }
+      wrap.style.display = 'block';
+      const id = String(job.id || job.job_id);
+      if (player.dataset.jobId !== id) {   // don't reset playback on every poll
+        player.src = job.audio_url;
+        player.dataset.jobId = id;
+      }
+    }
+
+    function sourcesHTML(sources) {
+      if (!sources || !sources.length) return '';
+      const chips = sources.map(s =>
+        `<button class="src-chip" title="${escapeHtml((s.text || '').slice(0, 200))}" onclick="seekTo(${Number(s.start)})">▶ ${fmtTime(s.start)}</button>`
+      ).join('');
+      return `<div class="src-row"><span class="src-label">Sources</span>${chips}</div>`;
+    }
+
+    function highlightSegment(seg) {
+      const low = new Set((seg.low_conf || []).map(normWord).filter(Boolean));
+      return seg.text.split(' ').map(w => {
+        const esc = escapeHtml(w);
+        const key = normWord(w);
+        return key && low.has(key)
+          ? `<mark class="flag" title="Low confidence — check against the audio">${esc}</mark>`
+          : esc;
+      }).join(' ');
+    }
+
+    function groupSegments(segments, isMeeting) {
+      const MAX_SECS = isMeeting ? 90 : 45;   // split very long paragraphs
+      const MAX_CHARS = 700;
+      const MAX_GAP = 2.5;                    // non-meeting: new paragraph after a long pause
+      const groups = [];
+      let cur = null;
+
+      segments.forEach(seg => {
+        const speakerChanged = isMeeting && cur && seg.speaker !== cur.speaker;
+        const tooLong = cur && ((seg.end - cur.start) > MAX_SECS || cur.chars > MAX_CHARS);
+        const bigGap = cur && !isMeeting && (seg.start - cur.end) > MAX_GAP;
+
+        if (!cur || speakerChanged || tooLong || bigGap) {
+          cur = {speaker: seg.speaker, start: seg.start, end: seg.end, chars: 0, segs: []};
+          groups.push(cur);
+        }
+        cur.segs.push(seg);
+        cur.end = seg.end;
+        cur.chars += seg.text.length;
+      });
+      return groups;
+    }
+
+    function renderSegmentsTranscript(job) {
+      const isMeeting = job.purpose === 'meeting';
+      const names = job.speaker_names || {};
+      const label = sp => names[sp] || String(sp).replace('_', ' ');
+
+      let prevSpeaker = null;
+      const rows = groupSegments(job.segments, isMeeting).map(g => {
+        const showSpk = isMeeting && g.speaker !== prevSpeaker;
+        prevSpeaker = g.speaker;
+        const text = g.segs.map(s =>
+          `<span class="seg" onclick="seekTo(${Number(s.start)})">${highlightSegment(s)}</span>`
+        ).join(' ');
+        return `
+      <div class="transcript-line">
+        <button class="ts-btn" onclick="seekTo(${Number(g.start)})" title="Play from here">${fmtTime(g.start)}</button>
+        ${isMeeting ? `<span class="spk">${showSpk ? escapeHtml(label(g.speaker)) : ''}</span>` : ''}
+        <span class="txt">${text}</span>
+      </div>`;
+      }).join('');
+
+      const speakers = [...new Set(job.segments.map(s => s.speaker))];
+      const renameHTML = isMeeting ? `
+    <details class="rename-box" open>
+      <summary>Rename speakers</summary>
+      <div class="rename-grid">
+        ${speakers.map(sp => `
+          <label>${escapeHtml(String(sp).replace('_', ' '))}
+            <input class="spk-input" data-spk="${escapeHtml(sp)}" value="${escapeHtml(names[sp] || '')}" placeholder="e.g. Rahul">
+          </label>`).join('')}
+      </div>
+      <button class="file-link" onclick="saveSpeakerNames()">Save names</button>
+    </details>` : '';
+
+      const mistakeItems = (job.transcript_word_confidence || []).map(w => ({
+        text: w.word, confidence: w.confidence, time: w.start,
+      }));
+
+      return `
+    <div class="export-wrap">
+      <button class="file-link" onclick="toggleExportMenu(event,'transcript')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export transcript
+      </button>
+      <div class="export-menu" id="export-menu-transcript">
+        <button onclick="exportContent('transcript','txt')">Download .txt</button>
+        <button onclick="exportContent('transcript','md')">Download .md</button>
+        <button onclick="exportContent('transcript','pdf')">Download .pdf</button>
+      </div>
+    </div>
+    ${renameHTML}
+    ${rows}
+    ${renderMistakesList(mistakeItems)}`;
+    }
+
+    async function saveSpeakerNames() {
+      const names = {};
+      document.querySelectorAll('.spk-input').forEach(inp => {
+        const v = inp.value.trim();
+        if (v) names[inp.dataset.spk] = v;
+      });
+      try {
+        const updated = await api(`/jobs/${state.currentJobId}/speakers`, {method: 'PATCH', json: {speaker_names: names}});
+        state.currentJob.speaker_names = updated.speaker_names || names;
+        state.currentJob.display_transcript = updated.display_transcript;
+        renderTranscriptPanel(state.currentJob);
+        toast('Speaker names saved');
+      } catch (err) {
+        toast(err.message || 'Failed to save names', true);
+      }
+    }
+
     function renderMistakesList(items) {
       if (!items || !items.length) return '';
       const rows = items.map(it => `
     <div class="mistakes-item">
       <span class="snippet">${escapeHtml(it.text)}</span>
-      ${it.time != null ? `<span class="time">${fmtTime(it.time)}</span>` : ''}
+      ${it.time != null ? `<button class="ts-btn" style="width:auto;" onclick="seekTo(${Number(it.time)})">${fmtTime(it.time)}</button>` : ''}
       <span class="pct">${Math.round(it.confidence * 100)}%</span>
     </div>
   `).join('');
@@ -2905,7 +3160,7 @@
 
     function formattedOutputToText(job) {
       let data;
-      try { data = JSON.parse(job.formatted_output); } catch (e) { return ''; }
+      try {data = JSON.parse(job.formatted_output);} catch (e) {return '';}
       if (data.error) return '';
 
       const purpose = job.purpose;
@@ -2930,7 +3185,7 @@
       const isTranscript = kind === 'transcript';
       const isFormat = kind === 'format';
       const rawText = isTranscript
-        ? ((job.purpose === 'meeting' && job.speaker_transcript) ? job.speaker_transcript : (job.transcript || ''))
+        ? ((job.purpose === 'meeting') ? (job.display_transcript || job.speaker_transcript || job.transcript || '') : (job.transcript || ''))
         : (job.summary || '');
       const title = isTranscript ? 'Transcript' : 'Summary';
       const baseName = (job.title || job.filename || 'recording')
@@ -2939,16 +3194,16 @@
       const filename = `${baseName}_${kind}`;
 
       if (format === 'txt') {
-        triggerDownload(new Blob([rawText], { type: 'text/plain' }), `${filename}.txt`);
+        triggerDownload(new Blob([rawText], {type: 'text/plain'}), `${filename}.txt`);
       } else if (format === 'md') {
-        triggerDownload(new Blob([rawText], { type: 'text/markdown' }), `${filename}.md`);
+        triggerDownload(new Blob([rawText], {type: 'text/markdown'}), `${filename}.md`);
       } else if (format === 'pdf') {
         if (typeof window.jspdf === 'undefined') {
           toast('PDF export failed to load — check your connection and try again', true);
           return;
         }
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+        const {jsPDF} = window.jspdf;
+        const doc = new jsPDF({unit: 'pt', format: 'a4'});
         const margin = 48;
         const maxWidth = doc.internal.pageSize.getWidth() - margin * 2;
         doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
@@ -2960,7 +3215,7 @@
         const lineHeight = 15;
         const pageBottom = doc.internal.pageSize.getHeight() - margin;
         lines.forEach(line => {
-          if (y > pageBottom) { doc.addPage(); y = margin; }
+          if (y > pageBottom) {doc.addPage(); y = margin;}
           doc.text(line, margin, y);
           y += lineHeight;
         });
@@ -2987,10 +3242,28 @@
       document.getElementById('empty-state').style.display = 'none';
       document.getElementById('job-detail').style.display = 'flex';
 
-      const job = state.jobs.find(j => (j.id || j.job_id) === id) || {};
+      const listJob = state.jobs.find(j => (j.id || j.job_id) === id) || {};
+      state.currentJob = listJob;
+      renderJobHeader(listJob);
+      renderAudioPlayer({});
+      switchTab('transcript');
+      ['transcript', 'summary', 'format'].forEach(n => {
+        document.getElementById('panel-' + n).innerHTML = '<div class="processing-note">Loading…</div>';
+      });
+
+      // The list only has light columns now, so fetch the full job.
+      let job = listJob;
+      try {
+        const full = await api(`/status/${id}`);
+        job = Object.assign({}, listJob, full);
+      } catch (err) {
+        toast(err.message, true);
+      }
+      if (state.currentJobId !== id) return;   // user clicked another job meanwhile
+
       state.currentJob = job;
       renderJobHeader(job);
-      switchTab('transcript');
+      renderAudioPlayer(job);
       renderTranscriptPanel(job);
       renderSummaryPanel(job);
       renderFormatPanel(job);
@@ -3044,7 +3317,7 @@
       let match;
       const markers = [];
       while ((match = regex.exec(text)) !== null) {
-        markers.push({ speaker: match[1], textStart: regex.lastIndex });
+        markers.push({speaker: match[1], textStart: regex.lastIndex});
       }
       if (!markers.length) return null;
 
@@ -3070,10 +3343,20 @@
     function renderTranscriptPanel(job) {
       const el = document.getElementById('panel-transcript');
       const busy = ['uploading', 'processing', 'transcribing', 'queued', 'diarizing', 'summarizing', 'formatting', 'generating files'].includes((job.status || '').toLowerCase());
+      if ((job.status || '').toLowerCase() === 'failed') {
+        el.innerHTML = `<div class="processing-note">Processing failed.<br>${escapeHtml(job.error || 'Unknown error')}</div>`;
+        return;
+      }
       if (busy) {
         el.innerHTML = `<div class="processing-note">Transcribing and identifying speakers…<br>This updates automatically — no need to refresh.</div>`;
         return;
       }
+
+      if (job.segments && job.segments.length) {
+        el.innerHTML = renderSegmentsTranscript(job);
+        return;
+      }
+
       const displayText = (job.purpose === 'meeting' && job.speaker_transcript) ? job.speaker_transcript : job.transcript;
 
       if (displayText) {
@@ -3092,7 +3375,7 @@
           bodyHtml = turns.map(t => {
             const localSpans = spans
               .filter(s => s.start >= t.start && s.end <= t.end)
-              .map(s => ({ start: s.start - t.start, end: s.end - t.start, confidence: s.confidence, time: s.time }));
+              .map(s => ({start: s.start - t.start, end: s.end - t.start, confidence: s.confidence, time: s.time}));
             const highlightedTurn = applyRealConfidenceSpans(t.text, localSpans);
             return `
           <div class="transcript-line">
@@ -3142,8 +3425,8 @@
       document.getElementById('edit-title-btn').style.display = 'none';
 
       input.addEventListener('keydown', e => {
-        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-        if (e.key === 'Escape') { e.preventDefault(); input.dataset.cancelled = 'true'; input.blur(); }
+        if (e.key === 'Enter') {e.preventDefault(); input.blur();}
+        if (e.key === 'Escape') {e.preventDefault(); input.dataset.cancelled = 'true'; input.blur();}
       });
       input.addEventListener('blur', () => {
         if (input.dataset.cancelled === 'true') restoreTitleDisplay(current);
@@ -3162,11 +3445,11 @@
       }
 
       try {
-        const res = await api(`/jobs/${id}`, { method: 'DELETE' });
+        const res = await api(`/jobs/${id}`, {method: 'DELETE'});
         if (res.error) throw new Error(res.error);
 
         state.jobs = state.jobs.filter(j => (j.id || j.job_id) !== id);
-        if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+        if (state.pollTimer) {clearInterval(state.pollTimer); state.pollTimer = null;}
         state.currentJobId = null;
         state.currentJob = null;
         renderJobList();
@@ -3181,11 +3464,11 @@
     async function saveTitleEdit(input, oldTitle) {
       const id = state.currentJobId;
       const newTitle = input.value.trim();
-      if (!newTitle || newTitle === oldTitle) { restoreTitleDisplay(oldTitle); return; }
+      if (!newTitle || newTitle === oldTitle) {restoreTitleDisplay(oldTitle); return;}
 
       restoreTitleDisplay(newTitle); // optimistic
       try {
-        const res = await api(`/jobs/${id}/title`, { method: 'PATCH', json: { title: newTitle } });
+        const res = await api(`/jobs/${id}/title`, {method: 'PATCH', json: {title: newTitle}});
         if (res.error) throw new Error(res.error);
         state.currentJob.title = newTitle;
         const idx = state.jobs.findIndex(j => (j.id || j.job_id) === id);
@@ -3258,7 +3541,7 @@
       }
 
       let data;
-      try { data = JSON.parse(job.formatted_output); } catch (e) {
+      try {data = JSON.parse(job.formatted_output);} catch (e) {
         el.innerHTML = `<div class="processing-note">Couldn't load the export for this recording.</div>`;
         return;
       }
@@ -3338,6 +3621,7 @@
           renderTranscriptPanel(state.currentJob);
           renderSummaryPanel(state.currentJob);
           renderFormatPanel(state.currentJob);
+          renderAudioPlayer(state.currentJob);
         }
         renderJobList();
         const stillBusy = ['uploading', 'processing', 'transcribing', 'queued', 'diarizing', 'summarizing', 'formatting', 'generating files'].includes((data.status || '').toLowerCase());
@@ -3375,15 +3659,15 @@
         if (m.question !== undefined && m.answer !== undefined) {
           return `
         <div class="msg msg-user" style="animation-delay:${i * 0.02}s"><div class="msg-bubble">${escapeHtml(m.question)}</div></div>
-        <div class="msg msg-ai" style="animation-delay:${i * 0.02 + 0.05}s"><div class="msg-bubble md">${renderModelOutput(m.answer, m.answer_confidence_spans)}</div></div>
-      `;
+        <div class="msg msg-ai" style="animation-delay:${i * 0.02 + 0.05}s"><div class="msg-bubble md">${renderModelOutput(m.answer, m.answer_confidence_spans)}${sourcesHTML(m.sources)}</div></div>
+        `;
         }
         return `<div class="msg ${isUser ? 'msg-user' : 'msg-ai'}" style="animation-delay:${i * 0.02}s"><div class="msg-bubble${isUser ? '' : ' md'}">${isUser ? escapeHtml(text) : renderModelOutput(text, m.answer_confidence_spans)}</div></div>`;
       }).join('');
       scroll.scrollTop = scroll.scrollHeight;
     }
     function askKeydown(e) {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
+      if (e.key === 'Enter' && !e.shiftKey) {e.preventDefault(); sendQuestion();}
     }
     async function sendQuestion() {
       const input = document.getElementById('ask-input');
@@ -3406,10 +3690,10 @@
 
       document.getElementById('ask-send').disabled = true;
       try {
-        const data = await api(`/ask/${state.currentJobId}`, { method: 'POST', json: { question: q } });
+        const data = await api(`/ask/${state.currentJobId}`, {method: 'POST', json: {question: q}});
         const answer = data.answer || data.response || data.content || 'No answer returned.';
-        thinking.innerHTML = `<div class="msg-bubble md">${renderModelOutput(answer, data.answer_confidence_spans)}</div>`;
-        state.messages.push({ question: q, answer, answer_confidence_spans: data.answer_confidence_spans });
+        thinking.innerHTML = `<div class="msg-bubble md">${renderModelOutput(answer, data.answer_confidence_spans)}${sourcesHTML(data.sources)}</div>`;
+        state.messages.push({question: q, answer, sources: data.sources, answer_confidence_spans: data.answer_confidence_spans});
       } catch (err) {
         thinking.innerHTML = `<div class="msg-bubble" style="color:#DB2777;">${escapeHtml(err.message)}</div>`;
       } finally {
@@ -3420,9 +3704,9 @@
 
     /* ---------- Upload ---------- */
     const dropzone = document.getElementById('dropzone');
-    ['dragover', 'dragenter'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('drag'); }));
-    ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('drag'); }));
-    dropzone.addEventListener('drop', e => { if (e.dataTransfer.files.length) handleFileSelect(e.dataTransfer.files); });
+    ['dragover', 'dragenter'].forEach(ev => dropzone.addEventListener(ev, e => {e.preventDefault(); dropzone.classList.add('drag');}));
+    ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, e => {e.preventDefault(); dropzone.classList.remove('drag');}));
+    dropzone.addEventListener('drop', e => {if (e.dataTransfer.files.length) handleFileSelect(e.dataTransfer.files);});
 
     function handleFileSelect(files) {
       if (!files || !files.length) return;
@@ -3445,12 +3729,12 @@
         if (title) fd.append('title', title);
         const purpose = document.getElementById('upload-purpose').value;
 
-        const headers = { 'ngrok-skip-browser-warning': 'true' };
+        const headers = {'ngrok-skip-browser-warning': 'true'};
         if (state.accessToken) headers['Authorization'] = `Bearer ${state.accessToken}`;
-        const res = await fetch(`${state.backendUrl}/upload?purpose=${encodeURIComponent(purpose)}`, { method: 'POST', headers, body: fd });
+        const res = await fetch(`${state.backendUrl}/upload?purpose=${encodeURIComponent(purpose)}`, {method: 'POST', headers, body: fd});
         if (!res.ok) {
           let msg = `Upload failed (${res.status})`;
-          try { const d = await res.json(); msg = d.detail || msg; } catch (e) { }
+          try {const d = await res.json(); msg = d.detail || msg;} catch (e) { }
           throw new Error(msg);
         }
         const data = await res.json();
@@ -3478,8 +3762,8 @@
     }
 
     /* ---------- Init ---------- */
-    document.getElementById('auth-email').addEventListener('keydown', e => { if (e.key === 'Enter') handleAuthSubmit(); });
-    document.getElementById('auth-password').addEventListener('keydown', e => { if (e.key === 'Enter') handleAuthSubmit(); });
+    document.getElementById('auth-email').addEventListener('keydown', e => {if (e.key === 'Enter') handleAuthSubmit();});
+    document.getElementById('auth-password').addEventListener('keydown', e => {if (e.key === 'Enter') handleAuthSubmit();});
 
     (function init() {
       if (restoreSession()) {

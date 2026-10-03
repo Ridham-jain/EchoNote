@@ -1,8 +1,8 @@
-# Cadence
+# EchoNote
 
 Every recording, transcribed, summarized, and ready to talk to.
 
-Cadence is a full-stack app that turns audio recordings — meetings, interviews,
+EchoNote is a full-stack app that turns audio recordings — meetings, interviews,
 speeches, voice notes — into searchable transcripts, speaker-labeled conversations,
 AI-generated summaries, and a chat interface for asking questions about what was said.
 
@@ -11,12 +11,13 @@ AI-generated summaries, and a chat interface for asking questions about what was
 
 ## Features
 
-- 🎙️ **Transcription** — powered by faster-whisper, with word-level confidence flagging
-- 🗣️ **Speaker diarization** — automatically separates who said what in meetings
+- 🎙️ **Transcription** — faster-whisper with word-level timestamps; low-confidence words are highlighted so you know what to double-check
+- 🗣️ **Speaker diarization** — separates who said what, and you can rename `SPEAKER_00` to real names (applied across the transcript, exports and Q&A)
 - 📝 **AI summaries** — key points and action items, generated automatically
-- 💬 **Ask anything** — chat with your recording after it's processed, with full history saved
-- 📤 **Export** — download transcripts and summaries as .txt, .md, or .pdf
-- 🔒 **Per-user isolation** — Supabase Auth + Row-Level Security, every user only sees their own data
+- 💬 **Timestamped Q&A** — ask questions about a recording; answers cite the exact moments they came from, and clicking a source jumps the audio to that point
+- 🔊 **Audio playback** — listen in the app and click any transcript line to seek
+- 📤 **Export** — transcripts and summaries as .txt, .md, or .pdf
+- 🔒 **Per-user isolation** — Supabase Auth + Row-Level Security
 
 <!-- 📸 Transcript tab with speaker labels -->
 ![Transcript view](docs/screenshots/transcript.png)
@@ -31,15 +32,14 @@ AI-generated summaries, and a chat interface for asking questions about what was
 
 **Frontend:** Vanilla HTML/CSS/JS (no build step), Supabase Auth (direct REST calls)
 
-**Backend:** FastAPI, faster-whisper (transcription), pyannote (speaker diarization),
-Gemini API (summarization), Supabase (Postgres + Storage + Auth)
+**Backend:** FastAPI, faster-whisper, pyannote, Gemini API (summaries and answers), sentence-transformers (`bge-base-en-v1.5` embeddings + `bge-reranker-base` reranking), ffmpeg, Supabase (Postgres + Storage + Auth)
 
 ## Architecture
 
 <!-- 📸 architecture / data flow -->
 ```mermaid
 flowchart TD
-    A[Browser: Cadence frontend] -->|Supabase Auth REST| B[(Supabase Auth)]
+    A[Browser: EchoNote frontend] -->|Supabase Auth REST| B[(Supabase Auth)]
     A -->|HTTPS via ngrok| C[FastAPI backend on Colab]
     C -->|reads/writes| D[(Supabase Postgres<br/>jobs, qa_messages)]
     C -->|upload/download| E[(Supabase Storage<br/>job-files bucket)]
@@ -85,6 +85,9 @@ create table jobs (
   summary text,
   transcript_url text,
   summary_url text,
+  audio_url text,
+  segments jsonb,
+  speaker_names jsonb default '{}'::jsonb,
   transcript_word_confidence jsonb,
   formatted_output text,
   error text,
@@ -96,6 +99,7 @@ create table qa_messages (
   job_id uuid references jobs(id),
   question text,
   answer text,
+  sources jsonb,
   created_at timestamptz default now()
 );
 
@@ -118,8 +122,9 @@ Create a Storage bucket named `job-files`, and add a policy allowing `service_ro
 ## Known limitations
 
 - Backend runs on Colab + ngrok, so the URL changes on every restart (not production-hosted yet)
-- Jobs process sequentially, one at a time (single background worker thread)
-- Gemini free tier caps at 20 requests/day — summarization may fail under heavy testing
+- Jobs process sequentially (single worker); jobs in progress are marked failed if the server restarts
+- Speaker labels can be wrong on very short utterances
+- Depends on the Gemini API, which can return 503s under load (requests are retried)
 
 ## License
 
